@@ -42,20 +42,8 @@ app.use(morgan('combined'));
 
 //routes imports
 import AuthRouter from './routes/AuthRoutes.js';
-import CategoryRouter from './routes/categoryRoutes.js';
-import VendorRouter from './routes/vendorRoutes.js';
-import ProductRouter from './routes/productRoutes.js';
-import InventoryRouter from './routes/inventoryRoutes.js';
-import OrderRouter from './routes/orderRoutes.js';
-import ReportRouter from './routes/reportRoutes.js';
+import UserRouter from './routes/userRoutes.js';
 
 //routes declaration
 app.use('/api/v1',AuthRouter);
-app.use('/api/v1/categories',CategoryRouter);
-app.use('/api/v1/vendors',VendorRouter);
-app.use('/api/v1/products',ProductRouter);
-app.use('/api/v1/inventory',InventoryRouter);
-app.use('/api/v1/orders',OrderRouter);
-app.use('/api/v1/reports',ReportRouter);
-
-swaggerDocs(app);
+app.use('/api/v1',UserRouter);
