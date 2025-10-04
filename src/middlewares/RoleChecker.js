@@ -5,10 +5,7 @@ export const roleChecker = (requiredRoles) => {
     if (!userRoles || !Array.isArray(userRoles)) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-    
-    // Check if user has any of the required roles
     const hasRequiredRole = requiredRoles.some(role => userRoles.includes(role));
-    
     if (hasRequiredRole) {
       next();
     } else {

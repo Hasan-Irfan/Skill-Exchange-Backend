@@ -22,9 +22,8 @@ app.use(
   })
 );
 
-
 // Handling preflight requests
-app.options("*", cors()); // Enable pre-flight across-the-board
+app.options("*", cors()); 
 
 // Your routes and server setup
 app.get("/", (req, res) => {
@@ -41,7 +40,11 @@ app.use(morgan('combined'));
 //routes imports
 import AuthRouter from './routes/AuthRoutes.js';
 import UserRouter from './routes/userRoutes.js';
+import CategoryRouter from './routes/categoryRoutes.js';
+import ListingRouter from './routes/listingRoutes.js';
 
 //routes declaration
 app.use('/api/v1',AuthRouter);
 app.use('/api/v1',UserRouter);
+app.use('/api/v1',CategoryRouter);
+app.use('/api/v1',ListingRouter);
