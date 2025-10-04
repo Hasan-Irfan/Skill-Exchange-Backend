@@ -4,7 +4,6 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
 import morgan from 'morgan';
-import { swaggerDocs } from './config/swagger.js';
 
 dotenv.config({
   path: '.env'
@@ -16,7 +15,6 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000",
-      "https://78b371ec2126.ngrok-free.app"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],

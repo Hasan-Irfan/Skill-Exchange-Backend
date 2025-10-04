@@ -9,10 +9,6 @@ export const updateProfileSchema = Joi.object({
   location: Joi.object({
     country: Joi.string(),
     city: Joi.string(),
-    coords: Joi.object({
-      type: Joi.string().valid("Point"),
-      coordinates: Joi.array().items(Joi.number()).length(2),
-    }),
   }),
   availability: Joi.object({
     timezone: Joi.string(),

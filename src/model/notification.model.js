@@ -1,3 +1,6 @@
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
 const NotificationSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: "User" },
   type: { 

@@ -1,3 +1,6 @@
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
 const ReviewSchema = new Schema({
   exchange: { type: Schema.Types.ObjectId, ref: "Exchange", required: true },
   reviewer: { type: Schema.Types.ObjectId, ref: "User", required: true },

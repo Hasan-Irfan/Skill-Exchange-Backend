@@ -1,3 +1,6 @@
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
 const MessageSchema = new Schema({
   thread: { type: Schema.Types.ObjectId, ref: "Thread", required: true },
   sender: { type: Schema.Types.ObjectId, ref: "User", required: true },

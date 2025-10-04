@@ -1,3 +1,6 @@
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
 const SkillTagSchema = new Schema({
   name: { type: String, required: true, index: true },
   slug: { type: String, unique: true },

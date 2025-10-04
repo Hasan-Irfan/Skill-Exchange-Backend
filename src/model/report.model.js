@@ -1,3 +1,6 @@
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
 const ReportSchema = new Schema({
   reporter: { type: Schema.Types.ObjectId, ref: "User" },
   againstUser: { type: Schema.Types.ObjectId, ref: "User" },

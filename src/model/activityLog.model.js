@@ -1,3 +1,6 @@
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
 const ActivityLogSchema = new Schema({
   actor: { type: Schema.Types.ObjectId, ref: "User" },
   action: String,

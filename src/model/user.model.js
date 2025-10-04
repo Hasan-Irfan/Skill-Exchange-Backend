@@ -18,10 +18,6 @@ const UserSchema = new Schema({
   location: {
     country: String,
     city: String,
-    coords: {
-      type: { type: String, enum: ["Point"], default: "Point" },
-      coordinates: [Number], // [lng, lat]
-    },
   },
 
   availability: {
@@ -43,8 +39,9 @@ const UserSchema = new Schema({
   },
 
   lastLoginAt: Date,
+  isVerified: { type: Boolean, default: false },
+  refreshToken: { type: String },
 }, { timestamps: true });
 
-UserSchema.index({ "location.coords": "2dsphere" });
 
 export default mongoose.model("User", UserSchema);

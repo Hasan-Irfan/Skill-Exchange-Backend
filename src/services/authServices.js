@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import User from "../model/user.model.js";
@@ -81,28 +81,47 @@ export const registerUser = async (username, email, password) => {
     expiresIn: "1d",
   });
 
-  const verificationUrl = `http://localhost:8080/main/verify-email/${token}`;
+  const verificationUrl = `http://localhost:8080/api/v1/verify-email/${token}`;
 
   const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false, // true for 465, false for other ports
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    tls: {
+      rejectUnauthorized: false
+    },
+    connectionTimeout: 60000, // 60 seconds
+    greetingTimeout: 30000, // 30 seconds
+    socketTimeout: 60000, // 60 seconds
   });
 
-  await transporter.verify();
+  try {
+    await transporter.verify();
+    console.log("SMTP connection verified successfully");
 
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: newUser.email,
-    subject: "Verify Your Email",
-    html: `<p>Click the link to verify your email: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
-  };
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: newUser.email,
+      subject: "Verify Your Email",
+      html: `<p>Click the link to verify your email: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
+    console.log("Verification email sent successfully");
 
-  return { message: "User registered successfully. Please verify your email." };
+    return { message: "User registered successfully. Please verify your email." };
+  } catch (emailError) {
+    console.error("Email sending failed:", emailError);
+    // Return error when email fails
+    return { 
+      error: "Failed to send verification email. Please try again later.",
+      details: emailError.message
+    };
+  }
 };
 
 // Verify email
@@ -137,8 +156,10 @@ export const refreshTokenService = async (incomingRefreshToken) => {
     return { error: "Refresh token is expired or invalid" };
   }
 
-  const { accessToken } = generateTokens(user._id);
-  return { accessToken, refreshToken: incomingRefreshToken };
+  const { accessToken, refreshToken } = generateTokens(user._id);
+  user.refreshToken = refreshToken;
+  await user.save();
+  return { accessToken, refreshToken };
 };
 
 // Send reset password email
@@ -153,22 +174,39 @@ export const sendResetPasswordEmail = async (email) => {
   );
 
   const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false, // true for 465, false for other ports
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
+    tls: {
+      rejectUnauthorized: false
+    },
+    connectionTimeout: 60000, // 60 seconds
+    greetingTimeout: 30000, // 30 seconds
+    socketTimeout: 60000, // 60 seconds
   });
 
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: user.email,
-    subject: "Password Reset Link",
-    text: `http://localhost:3000/updatePassword/${resetToken}`,
-  };
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: user.email,
+      subject: "Password Reset Link",
+      text: `http://localhost:3000/updatePassword/${resetToken}`,
+    };
 
-  await transporter.sendMail(mailOptions);
-  return { message: "Password reset link sent to email" };
+    await transporter.sendMail(mailOptions);
+    console.log("Password reset email sent successfully");
+    return { message: "Password reset link sent to email" };
+  } catch (emailError) {
+    console.error("Password reset email sending failed:", emailError);
+    return { 
+      error: "Failed to send password reset email. Please try again later.",
+      details: emailError.message
+    };
+  }
 };
 
 // Update password

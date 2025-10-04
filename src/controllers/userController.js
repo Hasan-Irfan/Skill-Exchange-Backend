@@ -1,4 +1,4 @@
-import { getUserDashboard , getUserDashboard , updateUserProfile } from "../services/userService";
+import { getUserDashboard , getUserProfile , updateUserProfile } from "../services/userService.js";
 
 export const getProfile = async (req, res) => {
   try {

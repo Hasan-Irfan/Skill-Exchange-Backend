@@ -1,7 +1,8 @@
-import User from "../models/User.js";
-import Listing from "../models/Listing.js";
-import Exchange from "../models/Exchange.js";
-import Review from "../models/Review.js";
+import User from "../model/user.model.js";
+import Listing from "../model/listing.model.js";
+import Exchange from "../model/exchange.model.js";
+import Review from "../model/review.model.js";
+
 
 export const getUserProfile = async (userId) => {
   const user = await User.findById(userId)
@@ -32,7 +33,6 @@ export const getUserProfile = async (userId) => {
 
 export const updateUserProfile = async (userId, data) => {
   const allowedFields = [
-    "name",
     "bio",
     "avatarUrl",
     "skillsOffered",

@@ -1,3 +1,6 @@
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
 const PaymentSchema = new Schema({
   exchange: { type: Schema.Types.ObjectId, ref: "Exchange" },
   payer: { type: Schema.Types.ObjectId, ref: "User" },

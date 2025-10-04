@@ -1,3 +1,6 @@
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
 const PageSchema = new Schema({
   slug: { type: String, unique: true },
   title: String,
