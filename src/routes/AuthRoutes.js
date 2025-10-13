@@ -11,7 +11,6 @@ router.route("/logout").post(jwtVerify, logout);
 router.route("/reset-password").post(resetPassword);
 router.route("/update-password/:resetToken").post( updatePassword);
 router.route("/refresh-token").post(refreshAccessToken);
-
 router.route("/verify").post(jwtVerify ,  (req,res) => {
     return res
     .status(200)

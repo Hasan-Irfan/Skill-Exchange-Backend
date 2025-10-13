@@ -1,4 +1,4 @@
-import { createListingService , getListingsService , getListingService , updateListingService , deleteListingService } from "../services/listingService";
+import { createListingService , getListingsService , getListingService , updateListingService , deleteListingService } from "../services/listingService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const createListing = async (req, res) => {

@@ -25,7 +25,8 @@ export const loginUser = async (email, password) => {
   const user = await User.findOne({ email });
   if (!user) return { error: "User not found" };
 
-  if (!user.isVerified) return { error: "Please verify your email before logging in" };
+  if (!user.isVerified)
+    return { error: "Please verify your email before logging in" };
 
   const matchPass = await bcrypt.compare(password, user.password);
   if (!matchPass) return { error: "Invalid password" };
@@ -66,13 +67,13 @@ export const registerUser = async (username, email, password) => {
     isVerified: false,
     rating: {
       avg: 0,
-      count: 0
+      count: 0,
     },
     notificationPrefs: {
       email: true,
       sms: false,
-      push: false
-    }
+      push: false,
+    },
   });
 
   await newUser.save();
@@ -92,7 +93,7 @@ export const registerUser = async (username, email, password) => {
       pass: process.env.EMAIL_PASS,
     },
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
     },
     connectionTimeout: 60000, // 60 seconds
     greetingTimeout: 30000, // 30 seconds
@@ -102,24 +103,73 @@ export const registerUser = async (username, email, password) => {
   try {
     await transporter.verify();
     console.log("SMTP connection verified successfully");
-
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: newUser.email,
-      subject: "Verify Your Email",
-      html: `<p>Click the link to verify your email: <a href="${verificationUrl}">${verificationUrl}</a></p>`,
+      subject: "Verify Your Email - TradeMySkill.",
+      html: `
+    <div style="
+      font-family: 'Poppins',sans-serif;
+      background-color: #f8fff8;
+      padding: 40px 25px;
+      border-radius: 10px;
+      max-width: 600px;
+      margin: 0 auto;
+      box-shadow: 0 4px 10px rgba(76, 175, 80, 0.15);
+      text-align: center;
+      color: #333;
+    ">
+
+      <!-- Logo -->
+      <h1 style="margin-bottom: 15px; font-size: 30px; font-weight: 600;">
+        <p style="color: #4CAF50;">Trade<span style="color: #000;">MySkill</span>.</p>
+      </h1>
+
+      <!-- Heading -->
+      <h2 style="color: #2E7D32; margin-bottom: 20px;">Verify Your Email Address</h2>
+
+      <!-- Description -->
+      <p style="font-size: 16px; color: #555; line-height: 1.6; margin-bottom: 30px;">
+        Welcome to <strong> <span style="color: #4CAF50;">Trade<span style="color: #000;">MySkill</span>.</span></strong> <br> To complete your registration, please verify your email address by clicking the button below.
+      </p>
+
+      <!-- Button -->
+      <a href="${verificationUrl}" target="_blank"
+        style="
+          display: inline-block;
+          background-color: #4CAF50;
+          color: #fff;
+          padding: 12px 28px;
+          border-radius: 8px;
+          text-decoration: none;
+          font-size: 16px;
+          font-weight: 500;
+          transition: background-color 0.3s ease;
+        "
+      >
+        Verify Email
+      </a>
+
+      <!-- Footer -->
+      <p style="font-size: 14px; color: #777; margin-top: 35px;">
+        If you didn’t create an account, you can safely ignore this email.<br/>
+        <span style="color: #4CAF50; font-weight: 500;">– The TradeMySkill Team</span>
+      </p>
+    </div`,
     };
 
     await transporter.sendMail(mailOptions);
     console.log("Verification email sent successfully");
 
-    return { message: "User registered successfully. Please verify your email." };
+    return {
+      message: "User registered successfully. Please verify your email.",
+    };
   } catch (emailError) {
     console.error("Email sending failed:", emailError);
     // Return error when email fails
-    return { 
+    return {
       error: "Failed to send verification email. Please try again later.",
-      details: emailError.message
+      details: emailError.message,
     };
   }
 };
@@ -140,7 +190,11 @@ export const verifyUserEmail = async (token) => {
 
 // Logout
 export const logoutUser = async (userId) => {
-  await User.findByIdAndUpdate(userId, { $unset: { refreshToken: 1 } }, { new: true });
+  await User.findByIdAndUpdate(
+    userId,
+    { $unset: { refreshToken: 1 } },
+    { new: true }
+  );
   return { message: "Logged out successfully" };
 };
 
@@ -148,7 +202,10 @@ export const logoutUser = async (userId) => {
 export const refreshTokenService = async (incomingRefreshToken) => {
   if (!incomingRefreshToken) return { error: "Unauthorized request" };
 
-  const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
+  const decodedToken = jwt.verify(
+    incomingRefreshToken,
+    process.env.REFRESH_TOKEN_SECRET
+  );
   const user = await User.findById(decodedToken?._id);
 
   if (!user) return { error: "Invalid refresh token" };
@@ -172,6 +229,7 @@ export const sendResetPasswordEmail = async (email) => {
     process.env.RESET_TOKEN_SECRET,
     { expiresIn: "10m" }
   );
+  const resetURL = `http://localhost:5173/updatePassword/${resetToken}`;
 
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
@@ -182,7 +240,7 @@ export const sendResetPasswordEmail = async (email) => {
       pass: process.env.EMAIL_PASS,
     },
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
     },
     connectionTimeout: 60000, // 60 seconds
     greetingTimeout: 30000, // 30 seconds
@@ -193,8 +251,56 @@ export const sendResetPasswordEmail = async (email) => {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: user.email,
-      subject: "Password Reset Link",
-      text: `http://localhost:3000/updatePassword/${resetToken}`,
+      subject: "Password Reset Link - TradeMySkill.",
+      html: `
+    <div style="
+      font-family: 'Poppins', sans-serif;
+      background-color: #f8fff8;
+      padding: 40px 25px;
+      border-radius: 10px;
+      max-width: 600px;
+      margin: 0 auto;
+      box-shadow: 0 4px 10px rgba(76, 175, 80, 0.15);
+      text-align: center;
+      color: #333;
+    ">
+      <!-- Logo -->
+      <h1 style="margin-bottom: 15px; font-size: 30px; font-weight: 600;">
+        <p style="color: #4CAF50;">Trade<span style="color: #000;">MySkill</span>.</p>
+      </h1>
+
+      <!-- Heading -->
+      <h2 style="color: #2E7D32; margin-bottom: 20px;">Reset Your Password</h2>
+
+      <!-- Description -->
+      <p style="font-size: 16px; color: #555; line-height: 1.6; margin-bottom: 30px;">
+        You recently requested to reset your password for your TradeMySkill account.
+        Click the button below to set a new password. This link will expire soon.
+      </p>
+
+      <!-- Button -->
+      <a href="${resetURL}" target="_blank"
+        style="
+          display: inline-block;
+          background-color: #4CAF50;
+          color: #fff;
+          padding: 12px 28px;
+          border-radius: 8px;
+          text-decoration: none;
+          font-size: 16px;
+          font-weight: 500;
+          transition: background-color 0.3s ease;
+        "
+      >
+        Reset Password
+      </a>
+
+      <!-- Footer -->
+      <p style="font-size: 14px; color: #777; margin-top: 35px;">
+        Didn’t request a password reset? You can safely ignore this email.<br/>
+        <span style="color: #4CAF50; font-weight: 500;">– The TradeMySkill Team</span>
+      </p>
+    </div>`,
     };
 
     await transporter.sendMail(mailOptions);
@@ -202,9 +308,9 @@ export const sendResetPasswordEmail = async (email) => {
     return { message: "Password reset link sent to email" };
   } catch (emailError) {
     console.error("Password reset email sending failed:", emailError);
-    return { 
+    return {
       error: "Failed to send password reset email. Please try again later.",
-      details: emailError.message
+      details: emailError.message,
     };
   }
 };
