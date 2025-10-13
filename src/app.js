@@ -42,9 +42,17 @@ import AuthRouter from './routes/AuthRoutes.js';
 import UserRouter from './routes/userRoutes.js';
 import CategoryRouter from './routes/categoryRoutes.js';
 import ListingRouter from './routes/listingRoutes.js';
+import ExchangeRouter from './routes/exchangeRoutes.js';
+import MessageRouter from './routes/messageRoutes.js';
+import ThreadRouter from './routes/threadRoutes.js';
+import ReviewRouter from './routes/reviewRoutes.js';
 
 //routes declaration
 app.use('/api/v1',AuthRouter);
 app.use('/api/v1',UserRouter);
 app.use('/api/v1',CategoryRouter);
 app.use('/api/v1',ListingRouter);
+app.use('/api/v1',ExchangeRouter);
+app.use('/api/v1',MessageRouter);
+app.use('/api/v1',ThreadRouter);
+app.use('/api/v1',ReviewRouter);
