@@ -6,7 +6,7 @@ import Review from "../model/review.model.js";
 
 export const getUserProfile = async (userId) => {
   const user = await User.findById(userId)
-    .select("-passwordHash -__v")
+    .select("-password -__v")
     .lean();
 
   if (!user) throw new Error("User not found");
@@ -51,7 +51,7 @@ export const updateUserProfile = async (userId, data) => {
   const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
     new: true,
   })
-    .select("-passwordHash -__v")
+    .select("-password -__v")
     .lean();
 
   if (!updatedUser) throw new Error("User not found");

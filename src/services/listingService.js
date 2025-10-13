@@ -14,8 +14,7 @@ export const createListingService = async (userId, data) => {
     owner: userId,
   });
 
-  // Optionally add listing ID to user's listings if you track them there
-  await User.findByIdAndUpdate(userId, { $push: { listings: listing._id } });
+  // If you decide to track listings on the user, add a field in user schema first
 
   return listing.toObject();
 };
@@ -29,7 +28,8 @@ export const getListingsService = async (query) => {
   if (query.type) filter.type = query.type; // offer / need
   if (query.skill) filter.skill = query.skill;
   if (query.owner) filter.owner = query.owner;
-  if (query.city) filter["location.city"] = { $regex: query.city, $options: "i" };
+  // Listing has no location; you may filter on availability.timezone
+  if (query.timezone) filter["availability.timezone"] = { $regex: query.timezone, $options: "i" };
   if (query.q)
     filter.$or = [
       { title: { $regex: query.q, $options: "i" } },
@@ -41,7 +41,7 @@ export const getListingsService = async (query) => {
   const skip = (page - 1) * limit;
 
   const listings = await Listing.find(filter)
-    .populate("owner", "name avatarUrl")
+    .populate("owner", "username avatarUrl")
     .populate("skill", "name")
     .sort({ createdAt: -1 })
     .skip(skip)
@@ -61,7 +61,7 @@ export const getListingsService = async (query) => {
  */
 export const getListingService = async (listingId) => {
   const listing = await Listing.findById(listingId)
-    .populate("owner", "name avatarUrl bio skillsOffered")
+    .populate("owner", "username avatarUrl bio skillsOffered")
     .populate("skill", "name category")
     .lean();
 
@@ -85,9 +85,7 @@ export const updateListingService = async (user, listingId, data) => {
     "description",
     "type",
     "skill",
-    "priceRange",
     "availability",
-    "location",
     "attachments",
     "active",
   ];
