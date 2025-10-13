@@ -54,12 +54,12 @@ io.on('connection', (socket) => {
     const populated = await Message.findById(msg._id).populate('sender', 'username avatarUrl').lean();
     io.to(String(threadId)).emit('message:new', { threadId, message: populated });
   }));
-  // Join a thread room
+  // Join a thread room (validate access BEFORE joining)
   socket.on('thread:join', safeSocket(async ({ threadId }) => {
     if (!threadId) return;
-    socket.join(String(threadId));
     const { markRead } = await import('./src/services/messageService.js');
-    await markRead(threadId, socket.user.id);
+    await markRead(threadId, socket.user.id); // throws if not a participant
+    socket.join(String(threadId));
   }));
 
   // Leave a thread room

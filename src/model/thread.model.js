@@ -8,4 +8,6 @@ const ThreadSchema = new Schema({
   unreadBy: [{ type: Schema.Types.ObjectId, ref: "User" }]
 }, { timestamps: true });
 
+ThreadSchema.index({ participants: 1, lastMessageAt: -1 });
+
 export const Thread = mongoose.model("Thread", ThreadSchema);
