@@ -56,3 +56,8 @@ app.use('/api/v1',ExchangeRouter);
 app.use('/api/v1',MessageRouter);
 app.use('/api/v1',ThreadRouter);
 app.use('/api/v1',ReviewRouter);
+
+// Error handling middleware (must be after routes)
+import { errorHandler, notFound } from './middlewares/errorHandler.js';
+app.use(notFound);
+app.use(errorHandler);
