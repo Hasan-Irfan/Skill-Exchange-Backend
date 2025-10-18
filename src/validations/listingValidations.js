@@ -1,29 +1,39 @@
 import Joi from "joi";
+
 // Joi validation schema for listing creation/update
 export const listingSchema = Joi.object({
   title: Joi.string().min(3).max(100).required(),
   description: Joi.string().max(1000).required(),
   type: Joi.string().valid("offer", "need").required(),
-  skill: Joi.string().required(),
-  priceRange: Joi.object({
-    min: Joi.number().min(0),
-    max: Joi.number().min(Joi.ref("min")),
-    currency: Joi.string().default("PKR"),
+  skill: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required().messages({
+    'string.pattern.base': 'Skill must be a valid ObjectId'
   }),
+  experienceLevel: Joi.string().valid("beginner", "intermediate", "expert").optional(),
+  hourlyRate: Joi.number().min(0).optional(),
   availability: Joi.object({
-    timezone: Joi.string(),
-    slots: Joi.array().items(
-      Joi.object({
-        dayOfWeek: Joi.number().min(0).max(6),
-        from: Joi.string(),
-        to: Joi.string(),
-      })
-    ),
-  }),
-  location: Joi.object({
-    city: Joi.string(),
-    country: Joi.string(),
-  }),
-  attachments: Joi.array().items(Joi.string().uri()).optional(),
+    remote: Joi.boolean().optional(),
+    onsite: Joi.boolean().optional(),
+    timezone: Joi.string().optional(),
+  }).optional(),
+  tags: Joi.array().items(Joi.string().min(2).max(30)).optional(),
   active: Joi.boolean().default(true),
+});
+
+// Schema for listing updates (all fields optional)
+export const listingUpdateSchema = Joi.object({
+  title: Joi.string().min(3).max(100).optional(),
+  description: Joi.string().max(1000).optional(),
+  type: Joi.string().valid("offer", "need").optional(),
+  skill: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().messages({
+    'string.pattern.base': 'Skill must be a valid ObjectId'
+  }),
+  experienceLevel: Joi.string().valid("beginner", "intermediate", "expert").optional(),
+  hourlyRate: Joi.number().min(0).optional(),
+  availability: Joi.object({
+    remote: Joi.boolean().optional(),
+    onsite: Joi.boolean().optional(),
+    timezone: Joi.string().optional(),
+  }).optional(),
+  tags: Joi.array().items(Joi.string().min(2).max(30)).optional(),
+  active: Joi.boolean().optional(),
 });
