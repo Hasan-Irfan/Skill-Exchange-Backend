@@ -6,15 +6,18 @@ import SkillTag from "../model/skilltag.model.js";
  * Create a new listing
  */
 export const createListingService = async (userId, data) => {
-  const skillExists = await SkillTag.findById(data.skill);
-  if (!skillExists) throw new Error("Invalid skill ID");
+  // Validate that skill exists and is active
+  const skill = await SkillTag.findOne({ _id: data.skill, active: true })
+    .populate("category", "name");
+  
+  if (!skill) {
+    throw new Error("Invalid or inactive skill ID");
+  }
 
   const listing = await Listing.create({
     ...data,
     owner: userId,
   });
-
-  // If you decide to track listings on the user, add a field in user schema first
 
   return listing.toObject();
 };
@@ -42,7 +45,8 @@ export const getListingsService = async (query) => {
 
   const listings = await Listing.find(filter)
     .populate("owner", "username avatarUrl")
-    .populate("skill", "name")
+    .populate("skill", "name category")
+    .populate("skill.category", "name")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
@@ -61,8 +65,9 @@ export const getListingsService = async (query) => {
  */
 export const getListingService = async (listingId) => {
   const listing = await Listing.findById(listingId)
-    .populate("owner", "username avatarUrl bio skillsOffered")
+    .populate("owner", "username avatarUrl bio skillsOffered skillsNeeded")
     .populate("skill", "name category")
+    .populate("skill.category", "name")
     .lean();
 
   if (!listing) throw new Error("Listing not found");
@@ -76,8 +81,16 @@ export const updateListingService = async (user, listingId, data) => {
   const listing = await Listing.findById(listingId);
   if (!listing) throw new Error("Listing not found");
 
-  if (listing.owner.toString() !== user.id && user.role !== "admin") {
+  if (listing.owner.toString() !== user.id && !user.roles?.includes("admin")) {
     throw new Error("Not authorized to update this listing");
+  }
+
+  // Validate skill if being updated
+  if (data.skill) {
+    const skill = await SkillTag.findOne({ _id: data.skill, active: true });
+    if (!skill) {
+      throw new Error("Invalid or inactive skill ID");
+    }
   }
 
   const allowedFields = [
@@ -85,8 +98,10 @@ export const updateListingService = async (user, listingId, data) => {
     "description",
     "type",
     "skill",
+    "experienceLevel",
+    "hourlyRate",
     "availability",
-    "attachments",
+    "tags",
     "active",
   ];
 
@@ -105,10 +120,11 @@ export const deleteListingService = async (user, listingId) => {
   const listing = await Listing.findById(listingId);
   if (!listing) throw new Error("Listing not found");
 
-  if (listing.owner.toString() !== user.id && user.role !== "admin") {
+  if (listing.owner.toString() !== user.id && !user.roles?.includes("admin")) {
     throw new Error("Not authorized to delete this listing");
   }
 
-  await Listing.findByIdAndDelete(listingId);
+  // Soft delete by setting active to false
+  await Listing.findByIdAndUpdate(listingId, { active: false });
   return { message: "Listing deleted successfully" };
 };
