@@ -4,8 +4,8 @@ export const updateProfileSchema = Joi.object({
   name: Joi.string().min(2).max(50),
   bio: Joi.string().max(1000),
   avatarUrl: Joi.string().uri(),
-  skillsOffered: Joi.array().items(Joi.string()),
-  skillsNeeded: Joi.array().items(Joi.string()),
+  skillsOffered: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),
+  skillsNeeded: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)),
   location: Joi.object({
     country: Joi.string(),
     city: Joi.string(),
