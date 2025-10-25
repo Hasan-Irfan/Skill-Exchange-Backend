@@ -1,44 +1,67 @@
 import Category from "../model/category.model.js";
 import SkillTag from "../model/skilltag.model.js";
 
+// ---------- Helper Validators ----------
+const validateName = (name, field = "Name") => {
+  if (!name || !name.trim()) {
+    throw new Error(`${field} cannot be empty or whitespace`);
+  }
+  return name.trim();
+};
+
+const validateOrder = (order, allowNull = true) => {
+  if (order == null && allowNull) return; // skip if not provided
+  if (!Number.isInteger(order) || order < 0 || order > 10000) {
+    throw new Error("Order must be an integer between 0 and 10,000");
+  }
+};
+
 // ---------- Categories ----------
 export const getCategoriesService = async () => {
-  return await Category.find({ active: true }).sort({ order: 1, name: 1 }).lean();
+  return await Category.find({ active: true })
+    .sort({ order: 1, name: 1 })
+    .lean();
 };
 
 export const getCategoryByIdService = async (categoryId) => {
   const category = await Category.findById(categoryId);
-  if (!category) {
-    throw new Error("Category not found");
-  }
+  if (!category) throw new Error("Category not found");
   return category.toObject();
 };
 
 export const createCategoryService = async (data) => {
-  // Check if category name already exists
-  const existingCategory = await Category.findOne({ 
-    name: { $regex: new RegExp(`^${data.name}$`, 'i') },
-    active: true 
-  });
-  
-  if (existingCategory) {
-    throw new Error("Category with this name already exists");
+  // Validate name
+  data.name = validateName(data.name, "Category name");
+
+  // Auto-assign order if not provided
+  if (data.order == null) {
+    const maxOrderCat = await Category.findOne().sort({ order: -1 }).select("order");
+    data.order = maxOrderCat ? maxOrderCat.order + 1 : 0;
+  } else {
+    validateOrder(data.order, false);
   }
+
+  // Check if category name already exists
+  const existingCategory = await Category.findOne({
+    name: { $regex: new RegExp(`^${data.name}$`, "i") },
+    active: true,
+  });
+  if (existingCategory) throw new Error("Category with this name already exists");
 
   // Generate slug if not provided
   if (!data.slug) {
-    data.slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    data.slug = data.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
   }
 
   // Check if slug already exists
-  const existingSlug = await Category.findOne({ 
+  const existingSlug = await Category.findOne({
     slug: data.slug,
-    active: true 
+    active: true,
   });
-  
-  if (existingSlug) {
-    throw new Error("Category with this slug already exists");
-  }
+  if (existingSlug) throw new Error("Category with this slug already exists");
 
   const category = await Category.create(data);
   return category.toObject();
@@ -47,73 +70,78 @@ export const createCategoryService = async (data) => {
 export const updateCategoryService = async (categoryId, data) => {
   // Check if category exists
   const existingCategory = await Category.findById(categoryId);
-  if (!existingCategory) {
-    throw new Error("Category not found");
-  }
+  if (!existingCategory) throw new Error("Category not found");
+  if (!existingCategory.active)
+    throw new Error("Cannot update a deleted category");
 
-  // Check if name is being updated and if it already exists
-  if (data.name && data.name !== existingCategory.name) {
-    const duplicateCategory = await Category.findOne({ 
-      name: { $regex: new RegExp(`^${data.name}$`, 'i') },
+  // Validate name if provided
+  if (data.name) {
+    data.name = validateName(data.name, "Category name");
+
+    // Check duplicate name
+    const duplicateCategory = await Category.findOne({
+      name: { $regex: new RegExp(`^${data.name}$`, "i") },
       _id: { $ne: categoryId },
-      active: true 
+      active: true,
     });
-    
-    if (duplicateCategory) {
+    if (duplicateCategory)
       throw new Error("Category with this name already exists");
-    }
   }
 
-  // Generate slug if name is updated and slug not provided
+  // Validate order if provided
+  validateOrder(data.order);
+
+  // Generate slug if name updated and slug not provided
   if (data.name && !data.slug) {
-    data.slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    data.slug = data.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
   }
 
-  // Check if slug is being updated and if it already exists
+  // Check duplicate slug
   if (data.slug && data.slug !== existingCategory.slug) {
-    const duplicateSlug = await Category.findOne({ 
+    const duplicateSlug = await Category.findOne({
       slug: data.slug,
       _id: { $ne: categoryId },
-      active: true 
+      active: true,
     });
-    
-    if (duplicateSlug) {
+    if (duplicateSlug)
       throw new Error("Category with this slug already exists");
-    }
   }
 
-  const category = await Category.findByIdAndUpdate(categoryId, data, { new: true });
+  const category = await Category.findByIdAndUpdate(categoryId, data, {
+    new: true,
+  });
   return category.toObject();
 };
 
 export const deleteCategoryService = async (categoryId) => {
-  // Check if category has skills
-  const skillsCount = await SkillTag.countDocuments({ category: categoryId, active: true });
-  if (skillsCount > 0) {
+  const category = await Category.findById(categoryId);
+  if (!category) throw new Error("Category not found");
+
+  if (!category.active) throw new Error("Category already deleted");
+
+  // Check if category has active skills
+  const skillsCount = await SkillTag.countDocuments({
+    category: categoryId,
+    active: true,
+  });
+  if (skillsCount > 0)
     throw new Error("Cannot delete category with existing skills");
-  }
-  
-  const category = await Category.findByIdAndUpdate(categoryId, { active: false }, { new: true });
-  if (!category) {
-    throw new Error("Category not found");
-  }
+
+  category.active = false;
+  await category.save();
   return category.toObject();
 };
 
 // ---------- Skills ----------
 export const getSkillsService = async (query, categoryId = null) => {
   let filter = { active: true };
-  
-  // Add category filter if provided
-  if (categoryId) {
-    filter.category = categoryId;
-  }
-  
-  // Add text search if query provided
-  if (query) {
-    filter.$text = { $search: query };
-  }
-  
+
+  if (categoryId) filter.category = categoryId;
+  if (query) filter.$text = { $search: query };
+
   return await SkillTag.find(filter)
     .populate("category", "name order")
     .sort({ "category.order": 1, "category.name": 1, order: 1, name: 1 })
@@ -127,64 +155,74 @@ export const getSkillsByCategoryService = async (categoryId) => {
 };
 
 export const createSkillService = async (data) => {
-  // Validate that category exists and is active
-  const category = await Category.findOne({ _id: data.category, active: true });
-  if (!category) {
-    throw new Error("Category not found or inactive");
-  }
+  // Validate name
+  data.name = validateName(data.name, "Skill name");
 
-  // Check if skill name already exists in the same category
-  const existingSkill = await SkillTag.findOne({ 
-    name: { $regex: new RegExp(`^${data.name}$`, 'i') },
-    category: data.category,
-    active: true 
+  // Validate category
+  const category = await Category.findOne({
+    _id: data.category,
+    active: true,
   });
-  
-  if (existingSkill) {
+  if (!category) throw new Error("Category not found or inactive");
+
+  // Validate order (admin provides)
+  validateOrder(data.order);
+
+  // Check if skill name already exists in same category
+  const existingSkill = await SkillTag.findOne({
+    name: { $regex: new RegExp(`^${data.name}$`, "i") },
+    category: data.category,
+    active: true,
+  });
+  if (existingSkill)
     throw new Error("Skill with this name already exists in this category");
-  }
 
   // Generate slug if not provided
   if (!data.slug) {
-    data.slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    data.slug = data.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
   }
 
   // Check if slug already exists globally
-  const existingSlug = await SkillTag.findOne({ 
+  const existingSlug = await SkillTag.findOne({
     slug: data.slug,
-    active: true 
+    active: true,
   });
-  
-  if (existingSlug) {
-    throw new Error("Skill with this slug already exists");
-  }
-  
+  if (existingSlug) throw new Error("Skill with this slug already exists");
+
   const skill = await SkillTag.create(data);
   return skill.toObject();
 };
 
 export const updateSkillService = async (skillId, data) => {
+  const skill = await SkillTag.findById(skillId);
+  if (!skill) throw new Error("Skill not found");
+  if (!skill.active) throw new Error("Cannot update a deleted skill");
+
+  // Validate name if provided
+  if (data.name) data.name = validateName(data.name, "Skill name");
+
+  // Validate order if provided
+  validateOrder(data.order);
+
   // Validate category if being updated
   if (data.category) {
     const category = await Category.findById(data.category);
-    if (!category) {
-      throw new Error("Category not found");
-    }
+    if (!category) throw new Error("Category not found");
   }
-  
-  const skill = await SkillTag.findByIdAndUpdate(skillId, data, { new: true });
-  if (!skill) {
-    throw new Error("Skill not found");
-  }
-  
-  return skill.toObject();
+
+  const updated = await SkillTag.findByIdAndUpdate(skillId, data, { new: true });
+  return updated.toObject();
 };
 
 export const deleteSkillService = async (skillId) => {
-  const skill = await SkillTag.findByIdAndUpdate(skillId, { active: false }, { new: true });
-  if (!skill) {
-    throw new Error("Skill not found");
-  }
-  
+  const skill = await SkillTag.findById(skillId);
+  if (!skill) throw new Error("Skill not found");
+  if (!skill.active) throw new Error("Skill already deleted");
+
+  skill.active = false;
+  await skill.save();
   return skill.toObject();
 };
