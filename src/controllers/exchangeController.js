@@ -1,4 +1,4 @@
-import { createExchangeService, updateStatusService, signAgreementService, fundEscrowService, startExchangeService, confirmCompleteService, cancelExchangeService, disputeExchangeService, getExchangeService } from "../services/exchangeServices.js";
+import { createExchangeService, updateStatusService, signAgreementService, fundEscrowService, startExchangeService, confirmCompleteService, cancelExchangeService, disputeExchangeService, resolveDisputeService, getExchangeService } from "../services/exchangeServices.js";
 
 export const createExchange = async (req, res) => {
     try {
@@ -75,6 +75,15 @@ export const cancelExchange = async (req, res) => {
 export const disputeExchange = async (req, res) => {
     try {
         const exchange = await disputeExchangeService(req.user, req.params.id, req.body.reason);
+        res.json({ success: true, data: exchange });
+    } catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+};
+
+export const resolveDispute = async (req, res) => {
+    try {
+        const exchange = await resolveDisputeService(req.user, req.params.id, req.body.resolution);
         res.json({ success: true, data: exchange });
     } catch (err) {
         res.status(400).json({ success: false, message: err.message });

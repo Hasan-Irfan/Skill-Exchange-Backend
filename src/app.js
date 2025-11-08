@@ -46,6 +46,7 @@ import ExchangeRouter from './routes/exchangeRoutes.js';
 import MessageRouter from './routes/messageRoutes.js';
 import ThreadRouter from './routes/threadRoutes.js';
 import ReviewRouter from './routes/reviewRoutes.js';
+import PaymentRouter from './routes/paymentRoutes.js';
 
 //routes declaration
 app.use('/api/v1',AuthRouter);
@@ -56,6 +57,7 @@ app.use('/api/v1',ExchangeRouter);
 app.use('/api/v1',MessageRouter);
 app.use('/api/v1',ThreadRouter);
 app.use('/api/v1',ReviewRouter);
+app.use('/api/v1',PaymentRouter);
 
 // Error handling middleware (must be after routes)
 import { errorHandler, notFound } from './middlewares/errorHandler.js';

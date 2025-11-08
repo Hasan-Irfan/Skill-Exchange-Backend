@@ -1,6 +1,7 @@
 import Listing from "../model/listing.model.js";
 import User from "../model/user.model.js";
 import SkillTag from "../model/skilltag.model.js";
+import Exchange from "../model/exchange.model.js"; // used to prevent deleting listings with active exchanges
 
 /**
  * Create a new listing
@@ -14,9 +15,13 @@ export const createListingService = async (userId, data) => {
     throw new Error("Invalid or inactive skill ID");
   }
 
+  // Choose currency, prefer provided value, fall back to skill or PKR
+  const currency = data.currency || skill?.currency || "PKR";
+
   const listing = await Listing.create({
     ...data,
     owner: userId,
+    currency
   });
 
   return listing.toObject();
@@ -39,6 +44,9 @@ export const getListingsService = async (query) => {
       { description: { $regex: query.q, $options: "i" } },
     ];
 
+  // optional filter by currency
+  if (query.currency) filter.currency = query.currency;
+
   const limit = parseInt(query.limit) || 20;
   const page = parseInt(query.page) || 1;
   const skip = (page - 1) * limit;
@@ -46,7 +54,6 @@ export const getListingsService = async (query) => {
   const listings = await Listing.find(filter)
     .populate("owner", "username avatarUrl")
     .populate("skill", "name category")
-    .populate("skill.category", "name")
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
@@ -67,7 +74,6 @@ export const getListingService = async (listingId) => {
   const listing = await Listing.findById(listingId)
     .populate("owner", "username avatarUrl bio skillsOffered skillsNeeded")
     .populate("skill", "name category")
-    .populate("skill.category", "name")
     .lean();
 
   if (!listing) throw new Error("Listing not found");
@@ -93,6 +99,20 @@ export const updateListingService = async (user, listingId, data) => {
     }
   }
 
+  // If attempting to change critical fields while there are active exchanges, either block or log
+  const protectedFields = ["skill", "hourlyRate", "currency"];
+  const isChangingProtected = protectedFields.some(f => data[f] !== undefined);
+  if (isChangingProtected) {
+    const activeEx = await Exchange.findOne({
+      $or: [{ "request.listing": listingId }, { "offer.listing": listingId }],
+      status: { $nin: ["declined","cancelled","completed","resolved"] }
+    }).lean();
+
+    if (activeEx) {
+      throw new Error("Cannot modify key listing fields while there are active exchanges referencing this listing");
+    }
+  }
+
   const allowedFields = [
     "title",
     "description",
@@ -100,6 +120,7 @@ export const updateListingService = async (user, listingId, data) => {
     "skill",
     "experienceLevel",
     "hourlyRate",
+    "currency",
     "availability",
     "tags",
     "active",
@@ -115,6 +136,7 @@ export const updateListingService = async (user, listingId, data) => {
 
 /**
  * Delete a listing (only owner or admin)
+ * Soft delete, but prevent deletion if there are ongoing exchanges referencing it
  */
 export const deleteListingService = async (user, listingId) => {
   const listing = await Listing.findById(listingId);
@@ -122,6 +144,16 @@ export const deleteListingService = async (user, listingId) => {
 
   if (listing.owner.toString() !== user.id && !user.roles?.includes("admin")) {
     throw new Error("Not authorized to delete this listing");
+  }
+
+  // Prevent soft-delete when there are active exchanges referencing this listing
+  const activeEx = await Exchange.findOne({
+    $or: [{ "request.listing": listingId }, { "offer.listing": listingId }],
+    status: { $nin: ["declined","cancelled","completed","resolved"] }
+  }).lean();
+
+  if (activeEx) {
+    throw new Error("Cannot delete listing while there are ongoing exchanges referencing it");
   }
 
   // Soft delete by setting active to false

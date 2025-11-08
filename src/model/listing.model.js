@@ -9,6 +9,8 @@ const ListingSchema = new Schema({
   description: String,
   experienceLevel: { type: String, enum: ["beginner","intermediate","expert"] },
   hourlyRate: Number,
+  // currency added, default PKR
+  currency: { type: String, default: "PKR" },
   availability: {
     remote: Boolean,
     onsite: Boolean,
@@ -18,6 +20,7 @@ const ListingSchema = new Schema({
   active: { type: Boolean, default: true }
 }, { timestamps: true });
 
+// text index for search
 ListingSchema.index({ title: "text", description: "text", tags: "text" });
 
 export default mongoose.model("Listing", ListingSchema);

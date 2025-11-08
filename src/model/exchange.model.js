@@ -1,12 +1,40 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+const SkillSnapshotSchema = new Schema({
+  skillId: { type: Schema.Types.ObjectId, ref: "Skill" },
+  name: String,
+  level: { type: String, enum: ["beginner","intermediate","expert"], default: "intermediate" },
+  hourlyRate: Number,
+  currency: { type: String, default: "PKR" },
+  details: String
+}, { _id: false });
+
+const ListingSnapshotSchema = new Schema({
+  title: String,
+  skillId: { type: Schema.Types.ObjectId, ref: "SkillTag" },
+  price: Number,
+  currency: String,
+  ownerId: { type: Schema.Types.ObjectId, ref: "User" },
+  visibility: String,
+  version: Number
+}, { _id: false });
+
 const ExchangeSchema = new Schema({
   initiator: { type: Schema.Types.ObjectId, ref: "User", required: true },
-  receiver: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  receiver:  { type: Schema.Types.ObjectId, ref: "User", required: true },
 
-  offer: { listing: { type: Schema.Types.ObjectId, ref: "Listing" }, notes: String },
-  request: { listing: { type: Schema.Types.ObjectId, ref: "Listing" }, notes: String },
+  offer: {
+    listing: { type: Schema.Types.ObjectId, ref: "Listing" },
+    notes: String,
+    skillSnapshot: SkillSnapshotSchema
+  },
+
+  request: {
+    listing: { type: Schema.Types.ObjectId, ref: "Listing", required: true },
+    notes: String,
+    listingSnapshot: ListingSnapshotSchema
+  },
 
   type: { type: String, enum: ["barter","monetary","hybrid"], default: "barter" },
   monetary: {
@@ -14,7 +42,7 @@ const ExchangeSchema = new Schema({
     totalAmount: Number,
     depositPercent: { type: Number, default: 10 },
     depositAmount: Number,
-    escrowPaymentId: { type: Schema.Types.ObjectId, ref: "Payment" },
+    escrowPaymentId: { type: Schema.Types.ObjectId, ref: "Payment" }
   },
 
   agreement: {
@@ -35,12 +63,14 @@ const ExchangeSchema = new Schema({
 
   confirmations: {
     initiator: { type: Boolean, default: false },
-    receiver: { type: Boolean, default: false }
+    receiver:  { type: Boolean, default: false }
   },
 
   audit: [{ at: Date, by: Schema.Types.ObjectId, action: String }]
 }, { timestamps: true });
 
 ExchangeSchema.index({ initiator: 1, receiver: 1, createdAt: -1 });
+ExchangeSchema.index({ status: 1, createdAt: -1 });
+ExchangeSchema.index({ "monetary.escrowPaymentId": 1 });
 
-export default mongoose.model("Exchange", ExchangeSchema);
+export default mongoose.model("Exchange", ExchangeSchema)

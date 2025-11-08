@@ -3,7 +3,7 @@ import { createExchangeSchema, agreementSchema, fundSchema, disputeSchema } from
 import { jwtVerify } from "../middlewares/AuthChecker.js";
 import { checkExchangeAccess , checkExchangeReceiver } from "../middlewares/exchangeMiddlewares.js";
 import { validateRequest } from "../middlewares/validate.js";
-import { createExchange , acceptExchange , declineExchange , signAgreement , fundEscrow , startExchange , confirmComplete , cancelExchange , disputeExchange , getExchange } from "../controllers/exchangeController.js";
+import { createExchange , acceptExchange , declineExchange , signAgreement , fundEscrow , startExchange , confirmComplete , cancelExchange , disputeExchange, resolveDispute , getExchange } from "../controllers/exchangeController.js";
 
 const router = express.Router();
 
@@ -17,6 +17,7 @@ router.post("/exchanges/:id/start", jwtVerify, checkExchangeAccess, startExchang
 router.post("/exchanges/:id/confirm-complete", jwtVerify, checkExchangeAccess, confirmComplete);
 router.post("/exchanges/:id/cancel", jwtVerify, checkExchangeAccess, cancelExchange);
 router.post("/exchanges/:id/dispute", jwtVerify, checkExchangeAccess, validateRequest(disputeSchema), disputeExchange);
+router.post("/exchanges/:id/resolve-dispute", jwtVerify, checkExchangeAccess, resolveDispute);
 router.get("/exchanges/:id", jwtVerify, checkExchangeAccess, getExchange);
 
 export default router;

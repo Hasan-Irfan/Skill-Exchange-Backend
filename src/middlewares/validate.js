@@ -1,6 +1,7 @@
-export const validateRequest = (schema) => {
+export const validateRequest = (schema, source = "body") => {
   return (req, res, next) => {
-    const { error } = schema.validate(req.body);
+    const data = source === "query" ? req.query : req.body;
+    const { error } = schema.validate(data);
     
     if (error) {
       const errorMessage = error.details.map(detail => detail.message).join(", ");
@@ -12,4 +13,5 @@ export const validateRequest = (schema) => {
     }
     
     next();
-}};
+  };
+};

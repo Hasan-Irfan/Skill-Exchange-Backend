@@ -136,22 +136,41 @@ export const deleteCategoryService = async (categoryId) => {
 };
 
 // ---------- Skills ----------
-export const getSkillsService = async (query, categoryId = null) => {
+export const getSkillsService = async (query = null, categoryId = null) => {
   let filter = { active: true };
 
+  // Filter by category if provided
   if (categoryId) filter.category = categoryId;
-  if (query) filter.$text = { $search: query };
 
-  return await SkillTag.find(filter)
+  // If query exists
+  if (query) {
+    // If it's a valid ObjectId → search by ID
+    if (mongoose.Types.ObjectId.isValid(query)) {
+      filter._id = query;
+    } else {
+      // Otherwise → perform text search on name/synonyms
+      filter.$text = { $search: query };
+    }
+  }
+
+  const skills = await SkillTag.find(filter)
     .populate("category", "name order")
     .sort({ "category.order": 1, "category.name": 1, order: 1, name: 1 })
     .lean();
+
+  return skills;
 };
 
-export const getSkillsByCategoryService = async (categoryId) => {
+export const getSkillsByCategoryService = async (categoryId , skillId = null) => {
   return await SkillTag.find({ category: categoryId, active: true })
     .sort({ order: 1, name: 1 })
     .lean();
+};
+
+export const getSkillByIdService = async (skillId) => {
+  const skill = await SkillTag.findById(skillId);
+  if (!skill) throw new Error("Skill not found");
+  return skill.toObject();
 };
 
 export const createSkillService = async (data) => {

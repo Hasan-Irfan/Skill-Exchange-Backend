@@ -13,7 +13,8 @@ import {
   getSkillsByCategory,
   createSkill,
   updateSkill,
-  deleteSkill
+  deleteSkill,
+  getSkillById
 } from "../controllers/categoryController.js";
 
 const router = express.Router();
@@ -28,6 +29,7 @@ router.delete("/categories/:id", jwtVerify, roleChecker(["admin"]), deleteCatego
 // ---------- Skill Routes ----------
 router.get("/skills", getSkills);
 router.get("/skills/category/:categoryId", getSkillsByCategory);
+router.get("/skills/:id", getSkillById);
 router.post("/skills", jwtVerify, roleChecker(["admin"]), validateRequest(skillSchema), createSkill);
 router.put("/skills/:id", jwtVerify, roleChecker(["admin"]), validateRequest(skillSchema), updateSkill);
 router.delete("/skills/:id", jwtVerify, roleChecker(["admin"]), deleteSkill);

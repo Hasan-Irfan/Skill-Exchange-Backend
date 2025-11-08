@@ -8,7 +8,8 @@ import {
   getSkillsByCategoryService,
   createSkillService,
   updateSkillService,
-  deleteSkillService
+  deleteSkillService,
+  getSkillByIdService
 } from "../services/categorySkillService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
@@ -52,6 +53,12 @@ export const getSkillsByCategory = asyncHandler(async (req, res) => {
   const { categoryId } = req.params;
   const skills = await getSkillsByCategoryService(categoryId);
   res.json({ success: true, data: skills });
+});
+
+export const getSkillById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const skill = await getSkillByIdService(id);
+  res.json({ success: true, data: skill });
 });
 
 export const createSkill = asyncHandler(async (req, res) => {
