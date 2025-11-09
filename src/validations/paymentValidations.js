@@ -1,6 +1,15 @@
 import Joi from "joi";
 
 /**
+ * Validation schema for initiating exchange payment
+ */
+export const initiateExchangePaymentSchema = Joi.object({
+  amount: Joi.number().positive().required(),
+  currency: Joi.string().min(2).max(10).optional().default("PKR"),
+  gateway: Joi.string().valid("stripe", "paypal", "manual").optional().default("manual")
+});
+
+/**
  * Validation schema for initiating gateway payment
  */
 export const initiateGatewayPaymentSchema = Joi.object({

@@ -4,6 +4,7 @@ import {
   getExchangePaymentsService,
   updatePaymentStatusService,
   initiateGatewayPaymentService,
+  initiateExchangePaymentService,
   handlePaymentWebhookService,
   refundPaymentService
 } from "../services/paymentService.js";
@@ -47,6 +48,22 @@ export const getExchangePayments = async (req, res) => {
     const isAdmin = req.user?.roles?.includes("admin") || false;
     const payments = await getExchangePaymentsService(req.params.exchangeId, req.user.id, isAdmin);
     res.json({ success: true, data: payments });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Initiate payment for exchange escrow (dummy payment)
+ */
+export const initiateExchangePayment = async (req, res) => {
+  try {
+    const { amount, currency = "PKR", gateway = "manual" } = req.body;
+    if (!amount || !Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, message: "Valid amount is required" });
+    }
+    const result = await initiateExchangePaymentService(req.params.exchangeId, req.user.id, amount, currency, gateway);
+    res.json(result);
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }

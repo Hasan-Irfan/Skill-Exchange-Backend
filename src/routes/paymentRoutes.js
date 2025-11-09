@@ -2,6 +2,7 @@ import express from "express";
 import { jwtVerify } from "../middlewares/AuthChecker.js";
 import { validateRequest } from "../middlewares/validate.js";
 import {
+  initiateExchangePaymentSchema,
   initiateGatewayPaymentSchema,
   updatePaymentStatusSchema,
   refundPaymentSchema,
@@ -12,6 +13,7 @@ import {
   getPayment,
   getUserPayments,
   getExchangePayments,
+  initiateExchangePayment,
   initiateGatewayPayment,
   updatePaymentStatus,
   handlePaymentWebhook,
@@ -38,6 +40,9 @@ router.get("/payments", jwtVerify, validateRequest(getUserPaymentsQuerySchema, "
 
 // Get payments for an exchange
 router.get("/exchanges/:exchangeId/payments", jwtVerify, getExchangePayments);
+
+// Initiate payment for exchange escrow (dummy payment)
+router.post("/exchanges/:exchangeId/initiate-payment", jwtVerify, validateRequest(initiateExchangePaymentSchema), initiateExchangePayment);
 
 // Initiate gateway payment
 router.post("/payments/:id/initiate", jwtVerify, validateRequest(initiateGatewayPaymentSchema), initiateGatewayPayment);

@@ -36,12 +36,10 @@ const ExchangeSchema = new Schema({
     listingSnapshot: ListingSnapshotSchema
   },
 
-  type: { type: String, enum: ["barter","monetary","hybrid"], default: "barter" },
+  type: { type: String, enum: ["barter","monetary","hybrid"] },
   monetary: {
     currency: { type: String, default: "PKR" },
-    totalAmount: Number,
-    depositPercent: { type: Number, default: 10 },
-    depositAmount: Number,
+    totalAmount: Number, // Full payment amount (no deposit system)
     escrowPaymentId: { type: Schema.Types.ObjectId, ref: "Payment" }
   },
 

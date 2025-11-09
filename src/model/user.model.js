@@ -32,6 +32,15 @@ const UserSchema = new Schema({
     count: { type: Number, default: 0 },
   },
 
+  // Payment tracking for dashboard
+  payments: {
+    totalReceived: { type: Number, default: 0 }, // Total amount received across all exchanges
+    totalPaid: { type: Number, default: 0 }, // Total amount paid across all exchanges
+    receivedCount: { type: Number, default: 0 }, // Number of payments received
+    paidCount: { type: Number, default: 0 }, // Number of payments made
+    currency: { type: String, default: "PKR" } // Primary currency (can be extended for multi-currency)
+  },
+
   notificationPrefs: {
     email: { type: Boolean, default: true },
     sms: { type: Boolean, default: false },

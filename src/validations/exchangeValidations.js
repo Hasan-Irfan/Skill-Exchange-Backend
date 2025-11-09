@@ -5,6 +5,7 @@ export const createExchangeSchema = Joi.object({
     'string.empty': 'requestListing is required',
     'any.required': 'requestListing is required'
   }),
+  // offerSkill is optional - can propose with skill (barter) or monetary payment
   offerSkill: Joi.object({
     skillId: Joi.string().optional(),
     name: Joi.string().required().messages({
@@ -15,12 +16,18 @@ export const createExchangeSchema = Joi.object({
     hourlyRate: Joi.number().min(0).optional(),
     currency: Joi.string().optional(),
     details: Joi.string().optional()
-  }).required().messages({
-    'any.required': 'offerSkill is required',
+  }).optional().messages({
     'object.base': 'offerSkill must be an object'
   }),
+  // Monetary info can be sent instead of or with offerSkill
+  monetary: Joi.object({
+    totalAmount: Joi.number().positive().optional(),
+    currency: Joi.string().min(2).max(10).optional()
+  }).optional(),
   notes: Joi.string().optional(),
   type: Joi.string().valid("barter", "monetary", "hybrid").optional()
+}).or('offerSkill', 'monetary').messages({
+  'object.missing': 'Either offerSkill or monetary must be provided'
 });
 
 export const fundSchema = Joi.object({
@@ -30,10 +37,10 @@ export const fundSchema = Joi.object({
 export const agreementSchema = Joi.object({
   newTerms: Joi.array().items(Joi.string()).optional(),
   signed: Joi.boolean().optional(),
+  type: Joi.string().valid("barter", "monetary", "hybrid").optional(),
   monetary: Joi.object({
     totalAmount: Joi.number().positive().optional(),
-    currency: Joi.string().min(2).max(10).optional(),
-    depositPercent: Joi.number().min(0).max(100).optional()
+    currency: Joi.string().min(2).max(10).optional()
   }).optional()
 });
 

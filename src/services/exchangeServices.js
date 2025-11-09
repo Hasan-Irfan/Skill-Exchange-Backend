@@ -2,18 +2,40 @@
 import mongoose from "mongoose";
 import Exchange from "../model/exchange.model.js";
 import Listing from "../model/listing.model.js";
-import Payment from "../model/payment.model.js";
 import { Thread } from "../model/thread.model.js";
-import { refundPaymentService, updatePaymentStatusService } from "./paymentService.js";
+import { refundPaymentService, createEscrowPaymentService, captureEscrowPaymentService } from "./paymentService.js";
 
 /**
  * Create new exchange request
  * Flow, user clicked a listing, provides offerSkill snapshot
  * payload, { requestListing, offerSkill, notes, type }
  */
+/**
+ * Create new exchange request
+ * 
+ * Flow:
+ * 1. PROPOSAL PHASE: Initiator proposes exchange with:
+ *    - For "offer" listings: Can send offerSkill (barter) OR monetary (payment) OR both (hybrid)
+ *    - For "need" listings: Can send offerSkill (what they provide) and optionally monetary
+ * 2. AGREEMENT PHASE: Both parties negotiate and finalize terms (type, amount, etc.)
+ * 3. ESCROW PHASE: Payer funds escrow
+ * 4. EXECUTION PHASE: Exchange starts and completes
+ * 
+ * @param {string} initiatorId - User creating the exchange
+ * @param {object} data - Exchange proposal data
+ * @param {string} data.requestListing - Listing ID the initiator clicked on
+ * @param {object} data.offerSkill - Optional: What initiator offers (for barter/hybrid)
+ * @param {object} data.monetary - Optional: Monetary proposal (for monetary/hybrid)
+ * @param {string} data.type - Optional: Exchange type hint (can be finalized in agreement)
+ * @param {string} data.notes - Optional notes
+ */
 export const createExchangeService = async (initiatorId, data) => {
   if (!data?.requestListing) throw new Error("requestListing is required");
-  if (!data?.offerSkill?.name) throw new Error("offerSkill is required");
+  
+  // Either offerSkill or monetary must be provided (or both for hybrid)
+  if (!data?.offerSkill && !data?.monetary) {
+    throw new Error("Either offerSkill or monetary must be provided");
+  }
 
   const session = await mongoose.startSession();
   let out;
@@ -36,18 +58,19 @@ export const createExchangeService = async (initiatorId, data) => {
       version: 1
     };
 
-    const exchange = await Exchange.create([{
+    const exchangeData = {
       initiator: initiatorId,
       receiver: listing.owner,
       offer: {
-        skillSnapshot: {
+        // Only include skillSnapshot if offerSkill is provided
+        skillSnapshot: data.offerSkill ? {
           skillId: data.offerSkill.skillId,
           name: data.offerSkill.name,
           level: data.offerSkill.level || "intermediate",
           hourlyRate: data.offerSkill.hourlyRate,
           currency: data.offerSkill.currency || "PKR",
           details: data.offerSkill.details
-        },
+        } : undefined,
         notes: data.notes
       },
       request: {
@@ -55,13 +78,35 @@ export const createExchangeService = async (initiatorId, data) => {
         notes: data.notes,
         listingSnapshot: requestSnapshot
       },
-      type: data.type || "barter",
       status: "proposed",
       thread: thread[0]._id,
       audit: [{ at: new Date(), by: initiatorId, action: "created" }]
-    }], { session });
+    };
 
-    out = exchange[0].toObject();
+    // Set exchange type if provided (can be finalized in agreement phase)
+    if (data.type && ["barter", "monetary", "hybrid"].includes(data.type)) {
+      exchangeData.type = data.type;
+    } else {
+      // Infer type from what's provided
+      if (data.offerSkill && data.monetary) {
+        exchangeData.type = "hybrid";
+      } else if (data.monetary) {
+        exchangeData.type = "monetary";
+      } else if (data.offerSkill) {
+        exchangeData.type = "barter";
+      }
+    }
+
+    // Set monetary info if provided (can be finalized in agreement phase)
+    if ((exchangeData.type === "monetary" || exchangeData.type === "hybrid") && data.monetary) {
+      exchangeData.monetary = {
+        currency: data.monetary.currency || "PKR",
+        totalAmount: data.monetary.totalAmount // Proposal amount (can be negotiated in agreement)
+      };
+    }
+
+    const [exchange] = await Exchange.create([exchangeData], { session });
+    out = exchange.toObject();
   });
   session.endSession();
   return out;
@@ -115,30 +160,78 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
     const isParty = [String(exchange.initiator), String(exchange.receiver)].includes(uid);
     if (!isParty) throw new Error("Unauthorized");
 
+    if (agreementData.type) {
+      if (!["barter", "monetary", "hybrid"].includes(agreementData.type)) {
+        throw new Error("Invalid exchange type");
+      }
+    }
+
     if (!["accepted_initial", "agreement_signed"].includes(exchange.status)) {
       throw new Error("Agreement stage is not active");
     }
 
-    if (!exchange.agreement) exchange.agreement = { terms: [], signedBy: [] };
+    // Update exchange type if provided
+    if (agreementData.type) {
+      const prevType = exchange.type;
+      exchange.type = agreementData.type;
+      if (prevType !== agreementData.type) {
+        exchange.audit.push({ at: new Date(), by: user.id, action: "type_set", note: agreementData.type });
+      }
+    }
 
-    // Allow setting monetary fields during agreement (for monetary/hybrid exchanges)
-    if (agreementData.monetary && (exchange.type === "monetary" || exchange.type === "hybrid")) {
-      if (agreementData.monetary.totalAmount && Number.isFinite(agreementData.monetary.totalAmount) && agreementData.monetary.totalAmount > 0) {
-        exchange.monetary = exchange.monetary || {};
+    // determine the effective type for this call
+    const finalType = exchange.type || agreementData.type;
+    if (!finalType) {
+      throw new Error("Exchange type must be set (barter, monetary, or hybrid)");
+    }
+
+    // If user is attempting to sign now, require monetary details immediately for monetary/hybrid
+    if (agreementData.signed === true && (finalType === "monetary" || finalType === "hybrid")) {
+      const providedTotal = agreementData.monetary && Number.isFinite(agreementData.monetary.totalAmount) ? agreementData.monetary.totalAmount : null;
+      const existingTotal = exchange.monetary && Number.isFinite(exchange.monetary.totalAmount) ? exchange.monetary.totalAmount : null;
+      const providedCurrency = agreementData.monetary && agreementData.monetary.currency ? agreementData.monetary.currency : null;
+      const existingCurrency = exchange.monetary && exchange.monetary.currency ? exchange.monetary.currency : null;
+
+      if (! (providedTotal || existingTotal) ) {
+        throw new Error("totalAmount is required when signing a monetary or hybrid agreement");
+      }
+      if (! (providedCurrency || existingCurrency) ) {
+        throw new Error("currency is required when signing a monetary or hybrid agreement");
+      }
+    }
+
+    // Handle monetary fields based on exchange type, merge any provided monetary inputs
+    if (finalType === "monetary" || finalType === "hybrid") {
+      exchange.monetary = exchange.monetary || {};
+
+      if (agreementData.monetary?.totalAmount) {
+        if (!Number.isFinite(agreementData.monetary.totalAmount) || agreementData.monetary.totalAmount <= 0) {
+          throw new Error("totalAmount must be a positive number");
+        }
         exchange.monetary.totalAmount = agreementData.monetary.totalAmount;
         exchange.audit.push({ at: new Date(), by: user.id, action: "monetary_totalAmount_set" });
       }
-      if (agreementData.monetary.currency) {
-        exchange.monetary = exchange.monetary || {};
+
+      if (agreementData.monetary?.currency) {
         exchange.monetary.currency = agreementData.monetary.currency;
         exchange.audit.push({ at: new Date(), by: user.id, action: "monetary_currency_set" });
       }
-      if (agreementData.monetary.depositPercent != null && Number.isFinite(agreementData.monetary.depositPercent)) {
-        exchange.monetary = exchange.monetary || {};
-        exchange.monetary.depositPercent = Math.max(0, Math.min(100, agreementData.monetary.depositPercent)); // Clamp between 0-100
-        exchange.audit.push({ at: new Date(), by: user.id, action: "monetary_depositPercent_set" });
+
+      // fallback default currency if still missing, keep this optional if you want strict requirement
+      if (!exchange.monetary.currency) {
+        exchange.monetary.currency = "PKR";
+      }
+    } else if (finalType === "barter") {
+      if (exchange.monetary) {
+        exchange.monetary = undefined;
+        exchange.audit.push({ at: new Date(), by: user.id, action: "monetary_cleared_for_barter" });
+      }
+      if (agreementData.monetary) {
+        throw new Error("Monetary fields cannot be set for barter exchanges");
       }
     }
+
+    if (!exchange.agreement) exchange.agreement = { terms: [], signedBy: [] };
 
     if (Array.isArray(agreementData.newTerms) && agreementData.newTerms.length > 0) {
       exchange.agreement.terms.push(...agreementData.newTerms);
@@ -159,6 +252,28 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
       .every(u => (exchange.agreement.signedBy || []).some(id => String(id) === u));
 
     if (bothSigned) {
+      // final validation before moving to agreement_signed
+      const finalTypeNow = exchange.type;
+      if (!finalTypeNow) {
+        throw new Error("Exchange type not set, please choose barter, monetary, or hybrid before finalizing agreement");
+      }
+
+      if (finalTypeNow === "monetary" || finalTypeNow === "hybrid") {
+        if (!exchange.monetary || !exchange.monetary.totalAmount || !exchange.monetary.currency) {
+          throw new Error("Monetary information is required for monetary or hybrid exchanges. Please set totalAmount and currency.");
+        }
+        if (!Number.isFinite(exchange.monetary.totalAmount) || exchange.monetary.totalAmount <= 0) {
+          throw new Error("totalAmount is required and must be a positive number for monetary or hybrid exchanges");
+        }
+        if (!exchange.monetary.currency || exchange.monetary.currency.trim() === "") {
+          throw new Error("currency is required for monetary or hybrid exchanges");
+        }
+      } else if (finalTypeNow === "barter") {
+        if (exchange.monetary && (exchange.monetary.totalAmount || exchange.monetary.currency)) {
+          throw new Error("Monetary fields should not be set for barter exchanges");
+        }
+      }
+
       exchange.status = "agreement_signed";
       exchange.audit.push({ at: new Date(), by: user.id, action: "agreement_fully_signed" });
     }
@@ -174,7 +289,10 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
  * Fund escrow
  * Only participants, only after agreement_signed
  * Only for monetary or hybrid exchanges
- * Prevent duplicate funding, validate amount and currency
+ * Full payment required (no deposit system)
+ * Payment direction: 
+ *   - If listing type is "offer": listing owner receives (they provide service)
+ *   - If listing type is "need": listing owner receives (they need service, initiator pays)
  */
 export const fundEscrowService = async (user, exchangeId, amount, currency = "PKR") => {
   if (!(Number.isFinite(amount) && amount > 0)) throw new Error("Invalid amount");
@@ -188,6 +306,10 @@ export const fundEscrowService = async (user, exchangeId, amount, currency = "PK
     const uid = String(user.id);
     const isParty = [String(exchange.initiator), String(exchange.receiver)].includes(uid);
     if (!isParty) throw new Error("Not authorized");
+
+    if (!exchange.type) {
+      throw new Error("Exchange type not set, please finalize agreement with a type (barter, monetary, hybrid) before funding or starting");
+    }
 
     // Escrow only required for monetary or hybrid exchanges
     if (exchange.type === "barter") {
@@ -205,28 +327,61 @@ export const fundEscrowService = async (user, exchangeId, amount, currency = "PK
       throw new Error(`Currency must be ${expectedCurrency}, provided: ${currency}`);
     }
 
-    // Validate and compute expected deposit amount
+    // Validate full payment amount (no deposit system)
     if (exchange.monetary?.totalAmount) {
-      const depositPercent = exchange.monetary?.depositPercent ?? 10;
-      const expected = Math.round((exchange.monetary.totalAmount * depositPercent) / 100);
-      if (expected > 0 && amount !== expected) {
-        throw new Error(`Deposit must be ${expected} ${currency} (${depositPercent}% of ${exchange.monetary.totalAmount})`);
+      if (amount !== exchange.monetary.totalAmount) {
+        throw new Error(`Full payment amount must be ${exchange.monetary.totalAmount} ${currency}`);
       }
     } else {
-      // If totalAmount is not set, store the amount as depositAmount
-      // This allows setting totalAmount later or using amount as the full payment
+      // If totalAmount is not set, use the provided amount as totalAmount
+      exchange.monetary = exchange.monetary || {};
+      exchange.monetary.totalAmount = amount;
     }
 
-    // Create payment within transaction
-    const [payment] = await Payment.create([{
-      exchange: exchange._id,
-      payer: user.id,
-      payee: null,
+    // Determine payment direction based on listing type
+    // Load the listing to check its type
+    const listing = await Listing.findById(exchange.request.listing).session(session);
+    if (!listing) throw new Error("Request listing not found");
+
+    // Payment direction logic:
+    // - If listing type is "offer": 
+    //   * Listing owner (receiver) is OFFERING a service
+    //   * Initiator wants that service
+    //   * Initiator PAYS listing owner (receiver) for receiving the service
+    //   * payer = initiator, payee = receiver ✅
+    //
+    // - If listing type is "need":
+    //   * Listing owner (receiver) NEEDS a service
+    //   * Initiator OFFERS to provide that service
+    //   * Listing owner PAYS initiator for the service they receive
+    //   * payer = receiver (listing owner), payee = initiator ✅
+    let payer, payee;
+    if (listing.type === "offer") {
+      // Listing owner offers service → initiator pays → listing owner receives
+      payer = exchange.initiator;
+      payee = exchange.receiver;
+    } else if (listing.type === "need") {
+      // Listing owner needs service → listing owner pays → initiator receives
+      payer = exchange.receiver;
+      payee = exchange.initiator;
+    } else {
+      throw new Error("Invalid listing type");
+    }
+
+    // Verify the correct user is funding (must be the payer)
+    if (String(user.id) !== String(payer)) {
+      throw new Error(`Only the payer can fund the escrow. For ${listing.type} listings, ${listing.type === "offer" ? "initiator" : "listing owner"} must pay.`);
+    }
+
+    // Create escrow payment using payment service (centralized logic)
+    const payment = await createEscrowPaymentService(
+      exchange._id,
+      payer,
+      payee, // Payee can be set now or later when captured
       amount,
       currency,
-      type: "escrow",
-      status: "escrowed"
-    }], { session });
+      session
+    );
 
     // Atomic update: only update if escrowPaymentId is still null (race condition protection)
     // This ensures that even if two requests come simultaneously, only one will succeed
@@ -242,7 +397,7 @@ export const fundEscrowService = async (user, exchangeId, amount, currency = "PK
       {
         $set: {
           "monetary.currency": currency,
-          "monetary.depositAmount": amount,
+          "monetary.totalAmount": amount, // Store full payment amount
           "monetary.escrowPaymentId": payment._id,
           status: "escrow_funded"
         },
@@ -271,13 +426,22 @@ export const fundEscrowService = async (user, exchangeId, amount, currency = "PK
  * - Barter exchanges: can start after agreement_signed (no escrow required)
  * - Monetary/Hybrid exchanges: require escrow_funded before starting
  */
-export const startExchangeService = async ( exchangeId, user) => {
+export const startExchangeService = async (exchangeId, user) => {
   const exchange = await Exchange.findById(exchangeId);
   if (!exchange) throw new Error("Exchange not found");
 
   const uid = String(user.id);
   const isParty = [String(exchange.initiator), String(exchange.receiver)].includes(uid);
   if (!isParty) throw new Error("Not authorized");
+
+  if (!exchange.type) {
+    throw new Error("Exchange type not set, please finalize agreement with a type (barter, monetary, hybrid) before funding or starting");
+  }
+
+  // Idempotency: if already in progress or completed, return early
+  if (exchange.status === "in_progress" || exchange.status === "completed") {
+    throw new Error("Exchange already in progress or completed");
+  }
 
   // Check if exchange can be started based on type
   if (exchange.type === "barter") {
@@ -325,7 +489,7 @@ export const confirmCompleteService = async (user, exchangeId) => {
     }
 
     const current = exchange.confirmations || { initiator: false, receiver: false };
-    
+
     // Idempotency: track if this confirmation is new
     let isNewConfirmation = false;
     if (isInitiator && !current.initiator) {
@@ -336,7 +500,7 @@ export const confirmCompleteService = async (user, exchangeId) => {
       current.receiver = true;
       isNewConfirmation = true;
     }
-    
+
     exchange.confirmations = current;
 
     // Only add audit entry if this is a new confirmation
@@ -349,41 +513,37 @@ export const confirmCompleteService = async (user, exchangeId) => {
       exchange.completedAt = new Date();
       exchange.audit.push({ at: new Date(), by: user.id, action: "completed" });
 
-      // Idempotent payment capture: use updatePaymentStatusService for consistency
-      // This ensures payment timeline and exchange audit are both updated
+      // Capture escrow payment using payment service (centralized logic)
+      // This handles payment status update, payee assignment, and user stats
       if (exchange.monetary?.escrowPaymentId) {
         try {
-          // Check current payment status
-          const existingPayment = await Payment.findById(exchange.monetary.escrowPaymentId).session(session);
-          if (existingPayment) {
-            // Only update if payment is still escrowed (idempotency)
-            if (existingPayment.status === "escrowed") {
-              // Update payment status (will also update exchange audit via updatePaymentStatusService)
-              // updatePaymentStatusService is idempotent, so safe to call
-              await updatePaymentStatusService(
-                exchange.monetary.escrowPaymentId,
-                "captured",
-                "Payment captured upon exchange completion",
-                user.id,
-                session
-              );
-              
-              // Set payee separately (updatePaymentStatusService doesn't handle payee assignment)
-              await Payment.findByIdAndUpdate(
-                exchange.monetary.escrowPaymentId,
-                { payee: exchange.receiver },
-                { session }
-              );
-            } else if (existingPayment.status !== "captured") {
-              // Payment is in an unexpected state
-              console.warn(`Payment ${exchange.monetary.escrowPaymentId} status is ${existingPayment.status}, expected escrowed or captured`);
+          // Determine correct payee based on listing type
+          const listingForPayment = await Listing.findById(exchange.request.listing).session(session);
+          let correctPayee;
+          if (listingForPayment) {
+            if (listingForPayment.type === "offer") {
+              // Listing owner offers service → they receive payment
+              correctPayee = exchange.receiver;
+            } else if (listingForPayment.type === "need") {
+              // Listing owner needs service → initiator receives payment
+              correctPayee = exchange.initiator;
+            } else {
+              correctPayee = exchange.receiver; // Fallback
             }
-            // If already captured, skip update (idempotent behavior)
-            // Exchange audit would have been updated when payment was first captured
+          } else {
+            correctPayee = exchange.receiver; // Fallback
           }
+
+          // Capture payment using payment service (handles everything)
+          await captureEscrowPaymentService(
+            exchange.monetary.escrowPaymentId,
+            correctPayee,
+            user.id,
+            session
+          );
         } catch (err) {
           // Log error but don't fail exchange completion
-          // Payment status update failure shouldn't block exchange completion
+          // Payment capture failure shouldn't block exchange completion
           console.error(`Failed to capture payment during exchange completion: ${err.message}`);
         }
       }
