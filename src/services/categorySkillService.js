@@ -101,23 +101,51 @@ export const deleteCategoryService = async (categoryId) => {
 };
 
 // ---------- Skills ----------
+
 export const getSkillsService = async (query, categoryId = null) => {
   let filter = { active: true };
-  
-  // Add category filter if provided
+
+  // 🔹 Add category filter if provided
   if (categoryId) {
     filter.category = categoryId;
   }
-  
-  // Add text search if query provided
-  if (query) {
-    filter.$text = { $search: query };
+
+  // 🔹 Handle search query
+  if (query && query.trim()) {
+    const trimmedQuery = query.trim();
+
+    // Escape regex special chars
+    const escapedQuery = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const searchRegex = new RegExp(escapedQuery, "i");
+
+    // 🔹 STEP 1: Find all category IDs whose names match the query
+    const matchedCategories = await Category.find({
+      name: searchRegex,
+    }).select("_id");
+
+    const matchedCategoryIds = matchedCategories.map((cat) => cat._id);
+
+    // 🔹 STEP 2: Build filter for skill search
+    filter.$or = [
+      { name: searchRegex },
+      { synonyms: searchRegex },
+      { category: { $in: matchedCategoryIds } }, // Match category by ID
+    ];
   }
-  
-  return await SkillTag.find(filter)
+
+  // 🔹 STEP 3: Fetch skills and populate category
+  const skills = await SkillTag.find(filter)
     .populate("category", "name order")
-    .sort({ "category.order": 1, "category.name": 1, order: 1, name: 1 })
+    .sort({
+      "category.order": 1,
+      "category.name": 1,
+      order: 1,
+      name: 1,
+    })
     .lean();
+
+  return skills;
 };
 
 export const getSkillsByCategoryService = async (categoryId) => {

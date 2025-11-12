@@ -17,12 +17,24 @@ export const login = asyncHandler(async (req, res) => {
   if (result.error) return res.status(400).json({ success: false, message: result.error });
 
   const { user, accessToken, refreshToken } = result;
-  const options = { httpOnly: true, secure: true };
+  // Set cookies with expiration: accessToken 45 minutes, refreshToken 7 days
+  const accessTokenOptions = { 
+    httpOnly: true, 
+    secure: process.env.NODE_ENV === 'production', 
+    sameSite: 'strict',
+    maxAge: 45 * 60 * 1000 // 45 minutes in milliseconds
+  };
+  const refreshTokenOptions = { 
+    httpOnly: true, 
+    secure: process.env.NODE_ENV === 'production', 
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+  };
 
   res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, accessTokenOptions)
+    .cookie("refreshToken", refreshToken, refreshTokenOptions)
     .json({
       success: true,
       message: "Logged in successfully",
@@ -59,7 +71,11 @@ export const verifyEmail = asyncHandler(async (req, res) => {
 // Logout
 export const logout = asyncHandler(async (req, res) => {
   const result = await logoutUser(req.user._id);
-  const options = { httpOnly: true, secure: true };
+  const options = { 
+    httpOnly: true, 
+    secure: process.env.NODE_ENV === 'production', 
+    sameSite: 'strict'
+  };
 
   res
     .status(200)
@@ -75,11 +91,23 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
 
   if (result.error) return res.status(401).json({ success: false, message: result.error });
 
-  const options = { httpOnly: true, secure: true };
+  // Set cookies with expiration: accessToken 45 minutes, refreshToken 7 days
+  const accessTokenOptions = { 
+    httpOnly: true, 
+    secure: process.env.NODE_ENV === 'production', 
+    sameSite: 'strict',
+    maxAge: 45 * 60 * 1000 // 45 minutes in milliseconds
+  };
+  const refreshTokenOptions = { 
+    httpOnly: true, 
+    secure: process.env.NODE_ENV === 'production', 
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+  };
   res
     .status(200)
-    .cookie("accessToken", result.accessToken, options)
-    .cookie("refreshToken", result.refreshToken, options)
+    .cookie("accessToken", result.accessToken, accessTokenOptions)
+    .cookie("refreshToken", result.refreshToken, refreshTokenOptions)
     .json({ success: true, ...result });
 });
 

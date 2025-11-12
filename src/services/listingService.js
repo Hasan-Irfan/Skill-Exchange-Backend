@@ -6,16 +6,37 @@ import SkillTag from "../model/skilltag.model.js";
  * Create a new listing
  */
 export const createListingService = async (userId, data) => {
-  // Validate that skill exists and is active
-  const skill = await SkillTag.findOne({ _id: data.skill, active: true })
-    .populate("category", "name");
-  
-  if (!skill) {
-    throw new Error("Invalid or inactive skill ID");
+  // Validate skills and extract categories
+  const allSkillIds = [
+    ...(data.skillsOffered || []),
+    ...(data.skillsNeeded || [])
+  ];
+
+  if (allSkillIds.length === 0) {
+    throw new Error("At least one skill (offered or needed) is required");
   }
+
+  // Validate all skills exist and are active, and collect unique categories
+  const skills = await SkillTag.find({
+    _id: { $in: allSkillIds },
+    active: true
+  }).populate("category", "_id name");
+
+  if (skills.length !== allSkillIds.length) {
+    throw new Error("One or more skills are invalid or inactive");
+  }
+
+  // Extract unique category IDs from skills
+  const categoryIds = [...new Set(
+    skills
+      .map(skill => skill.category?._id || skill.category)
+      .filter(Boolean)
+      .map(cat => cat._id || cat)
+  )];
 
   const listing = await Listing.create({
     ...data,
+    category: categoryIds, // Set categories from skills
     owner: userId,
   });
 
@@ -25,29 +46,100 @@ export const createListingService = async (userId, data) => {
 /**
  * Get listings with optional filters (type, skill, location, search, pagination)
  */
-export const getListingsService = async (query) => {
-  const filter = { active: true };
+export const getListingsService = async (query, requestingUserId = null) => {
+  // If requesting user is the owner, include inactive listings
+  // Otherwise, only show active listings
+  const filter = {};
+  
+  // Normalize some incoming query params
+  // Support both 'level' and 'experienceLevel' from the client
+  const experienceLevel = query.level || query.experienceLevel;
+  // Support multiple skills via repeated query params (?skills=a&skills=b) or comma-separated (?skills=a,b)
+  let skillIds = [];
+  if (query.skills) {
+    if (Array.isArray(query.skills)) {
+      skillIds = query.skills.filter(Boolean);
+    } else if (typeof query.skills === 'string') {
+      skillIds = query.skills.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+
+  // If owner filter is provided and matches requesting user, include inactive listings
+  if (query.owner && requestingUserId && query.owner === requestingUserId.toString()) {
+    // Include all listings (active and inactive) for the owner
+    filter.owner = query.owner;
+  } else {
+    // For public searches or other users' listings, only show active
+    filter.active = true;
+    if (query.owner) filter.owner = query.owner;
+  }
 
   if (query.type) filter.type = query.type; // offer / need
-  if (query.skill) filter.skill = query.skill;
-  if (query.owner) filter.owner = query.owner;
+  
+  // Handle category filtering - category is now an array
+  if (query.category) {
+    // Accept either a single id or comma-separated list
+    const categoryIds = Array.isArray(query.category)
+      ? query.category
+      : String(query.category).split(',').map(s => s.trim()).filter(Boolean);
+    // Match any of the selected categories
+    filter.category = { $in: categoryIds };
+  }
+  
+  // Experience level filter
+  if (experienceLevel) {
+    filter.experienceLevel = experienceLevel;
+  }
+
+  // Skills filter: listings that have at least one of the selected skills (either offered or needed)
+  if (skillIds.length > 0) {
+    filter.$or = [
+      { skillsOffered: { $in: skillIds } },
+      { skillsNeeded: { $in: skillIds } }
+    ];
+  }
+
   // Listing has no location; you may filter on availability.timezone
   if (query.timezone) filter["availability.timezone"] = { $regex: query.timezone, $options: "i" };
-  if (query.q)
-    filter.$or = [
+  if (query.remote === 'true') filter["availability.remote"] = true;
+  if (query.onsite === 'true') filter["availability.onsite"] = true;
+  
+  // Handle search query - combine with category $or if it exists
+  if (query.q) {
+    const searchOr = [
       { title: { $regex: query.q, $options: "i" } },
       { description: { $regex: query.q, $options: "i" } },
     ];
+    
+    if (filter.$or) {
+      // If category filter exists, combine with $and
+      filter.$and = [
+        { $or: filter.$or },
+        { $or: searchOr }
+      ];
+      delete filter.$or;
+    } else {
+      filter.$or = searchOr;
+    }
+  }
 
   const limit = parseInt(query.limit) || 20;
   const page = parseInt(query.page) || 1;
   const skip = (page - 1) * limit;
 
+  // Sorting
+  let sortOption = { createdAt: -1 }; // default: newest first
+  if (query.sort === 'oldest') sortOption = { createdAt: 1 };
+  else if (query.sort === 'hourlyRate-asc') sortOption = { hourlyRate: 1 };
+  else if (query.sort === 'hourlyRate-desc') sortOption = { hourlyRate: -1 };
+  else if (query.sort === 'rating') sortOption = { 'owner.rating.avg': -1 }; // Note: This would need aggregation for proper rating sort
+
   const listings = await Listing.find(filter)
-    .populate("owner", "username avatarUrl")
-    .populate("skill", "name category")
-    .populate("skill.category", "name")
-    .sort({ createdAt: -1 })
+    .populate("owner", "username avatarUrl rating")
+    .populate("category", "name")
+    .populate("skillsOffered", "name category")
+    .populate("skillsNeeded", "name category")
+    .sort(sortOption)
     .skip(skip)
     .limit(limit)
     .lean();
@@ -65,9 +157,10 @@ export const getListingsService = async (query) => {
  */
 export const getListingService = async (listingId) => {
   const listing = await Listing.findById(listingId)
-    .populate("owner", "username avatarUrl bio skillsOffered skillsNeeded")
-    .populate("skill", "name category")
-    .populate("skill.category", "name")
+    .populate("owner", "username avatarUrl bio skillsOffered")
+    .populate("category", "name")
+    .populate("skillsOffered", "name category")
+    .populate("skillsNeeded", "name category")
     .lean();
 
   if (!listing) throw new Error("Listing not found");
@@ -85,11 +178,32 @@ export const updateListingService = async (user, listingId, data) => {
     throw new Error("Not authorized to update this listing");
   }
 
-  // Validate skill if being updated
-  if (data.skill) {
-    const skill = await SkillTag.findOne({ _id: data.skill, active: true });
-    if (!skill) {
-      throw new Error("Invalid or inactive skill ID");
+  // If skills are being updated, extract categories from them
+  if (data.skillsOffered !== undefined || data.skillsNeeded !== undefined) {
+    const allSkillIds = [
+      ...(data.skillsOffered || listing.skillsOffered || []),
+      ...(data.skillsNeeded || listing.skillsNeeded || [])
+    ];
+
+    if (allSkillIds.length > 0) {
+      const skills = await SkillTag.find({
+        _id: { $in: allSkillIds },
+        active: true
+      }).populate("category", "_id name");
+
+      if (skills.length !== allSkillIds.length) {
+        throw new Error("One or more skills are invalid or inactive");
+      }
+
+      // Extract unique category IDs from skills
+      const categoryIds = [...new Set(
+        skills
+          .map(skill => skill.category?._id || skill.category)
+          .filter(Boolean)
+          .map(cat => cat._id || cat)
+      )];
+
+      data.category = categoryIds;
     }
   }
 
@@ -97,9 +211,11 @@ export const updateListingService = async (user, listingId, data) => {
     "title",
     "description",
     "type",
-    "skill",
+    "category",
     "experienceLevel",
     "hourlyRate",
+    "skillsOffered",
+    "skillsNeeded",
     "availability",
     "tags",
     "active",

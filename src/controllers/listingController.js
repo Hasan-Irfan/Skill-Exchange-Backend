@@ -13,7 +13,9 @@ export const createListing = asyncHandler(async (req, res) => {
 });
 
 export const getListings = asyncHandler(async (req, res) => {
-  const data = await getListingsService(req.query);
+  // Pass the requesting user ID to include inactive listings for the owner
+  const requestingUserId = req.user?.id || null;
+  const data = await getListingsService(req.query, requestingUserId);
   res.json({ success: true, data });
 });
 

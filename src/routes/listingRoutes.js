@@ -7,9 +7,12 @@ import { listingSchema, listingUpdateSchema } from "../validations/listingValida
 
 const router = express.Router();
 
+// Public routes - GET requests don't require authentication
+router.get("/listings", getListings);
+router.get("/listings/:id", getListing);
+
+// Protected routes - POST, PATCH, DELETE require authentication
 router.post("/listings", jwtVerify, validateRequest(listingSchema), createListing);
-router.get("/listings", jwtVerify, getListings);
-router.get("/listings/:id", jwtVerify, getListing);
 router.patch("/listings/:id", jwtVerify, validateRequest(listingUpdateSchema), updateListing);
 router.delete("/listings/:id", jwtVerify, deleteListing);
 

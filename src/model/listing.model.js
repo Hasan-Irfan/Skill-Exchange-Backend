@@ -4,11 +4,13 @@ const { Schema } = mongoose;
 const ListingSchema = new Schema({
   owner: { type: Schema.Types.ObjectId, ref: "User", required: true },
   type: { type: String, enum: ["offer", "need"], required: true },
-  skill: { type: Schema.Types.ObjectId, ref: "SkillTag", required: true },
+  category: [{ type: Schema.Types.ObjectId, ref: "Category" }],
   title: String,
   description: String,
   experienceLevel: { type: String, enum: ["beginner","intermediate","expert"] },
   hourlyRate: Number,
+  skillsOffered: [{ type: Schema.Types.ObjectId, ref: "SkillTag" }],
+  skillsNeeded: [{ type: Schema.Types.ObjectId, ref: "SkillTag" }],
   availability: {
     remote: Boolean,
     onsite: Boolean,

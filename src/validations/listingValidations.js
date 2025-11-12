@@ -5,11 +5,11 @@ export const listingSchema = Joi.object({
   title: Joi.string().min(3).max(100).required(),
   description: Joi.string().max(1000).required(),
   type: Joi.string().valid("offer", "need").required(),
-  skill: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required().messages({
-    'string.pattern.base': 'Skill must be a valid ObjectId'
-  }),
+  category: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
   experienceLevel: Joi.string().valid("beginner", "intermediate", "expert").optional(),
   hourlyRate: Joi.number().min(0).optional(),
+  skillsOffered: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
+  skillsNeeded: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
   availability: Joi.object({
     remote: Joi.boolean().optional(),
     onsite: Joi.boolean().optional(),
@@ -24,11 +24,11 @@ export const listingUpdateSchema = Joi.object({
   title: Joi.string().min(3).max(100).optional(),
   description: Joi.string().max(1000).optional(),
   type: Joi.string().valid("offer", "need").optional(),
-  skill: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).optional().messages({
-    'string.pattern.base': 'Skill must be a valid ObjectId'
-  }),
+  category: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
   experienceLevel: Joi.string().valid("beginner", "intermediate", "expert").optional(),
   hourlyRate: Joi.number().min(0).optional(),
+  skillsOffered: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
+  skillsNeeded: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
   availability: Joi.object({
     remote: Joi.boolean().optional(),
     onsite: Joi.boolean().optional(),
