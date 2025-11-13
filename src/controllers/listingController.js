@@ -1,9 +1,9 @@
-import { 
-  createListingService, 
-  getListingsService, 
-  getListingService, 
-  updateListingService, 
-  deleteListingService 
+import {
+  createListingService,
+  getListingsService,
+  getListingService,
+  updateListingService,
+  deleteListingService
 } from "../services/listingService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
@@ -13,7 +13,8 @@ export const createListing = asyncHandler(async (req, res) => {
 });
 
 export const getListings = asyncHandler(async (req, res) => {
-  const data = await getListingsService(req.query);
+  const requestingUserId = req.user?.id || null;
+  const data = await getListingsService(req.query, requestingUserId);
   res.json({ success: true, data });
 });
 

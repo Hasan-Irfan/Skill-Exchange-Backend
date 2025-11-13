@@ -8,8 +8,8 @@ import { listingSchema, listingUpdateSchema } from "../validations/listingValida
 const router = express.Router();
 
 router.post("/listings", jwtVerify, validateRequest(listingSchema), createListing);
-router.get("/listings", jwtVerify, getListings);
-router.get("/listings/:id", jwtVerify, getListing);
+router.get("/listings", getListings);
+router.get("/listings/:id", getListing);
 router.patch("/listings/:id", jwtVerify, validateRequest(listingUpdateSchema), updateListing);
 router.delete("/listings/:id", jwtVerify, deleteListing);
 

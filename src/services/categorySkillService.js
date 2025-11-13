@@ -139,17 +139,26 @@ export const deleteCategoryService = async (categoryId) => {
 export const getSkillsService = async (query = null, categoryId = null) => {
   let filter = { active: true };
 
-  // Filter by category if provided
   if (categoryId) filter.category = categoryId;
 
-  // If query exists
   if (query) {
-    // If it's a valid ObjectId → search by ID
+
     if (mongoose.Types.ObjectId.isValid(query)) {
       filter._id = query;
     } else {
-      // Otherwise → perform text search on name/synonyms
-      filter.$text = { $search: query };
+      const trimmedQuery = query.trim();
+      const escapedQuery = trimmedQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const searchRegex = new RegExp(escapedQuery, "i");
+      const matchedCategories = await Category.find({
+        name: searchRegex,
+      }).select("_id");
+
+      const matchedCategoryIds = matchedCategories.map((cat) => cat._id);
+      filter.$or = [
+        { name: searchRegex },
+        { synonyms: searchRegex },
+        { category: { $in: matchedCategoryIds } }, 
+      ];
     }
   }
 
@@ -161,7 +170,7 @@ export const getSkillsService = async (query = null, categoryId = null) => {
   return skills;
 };
 
-export const getSkillsByCategoryService = async (categoryId , skillId = null) => {
+export const getSkillsByCategoryService = async (categoryId, skillId = null) => {
   return await SkillTag.find({ category: categoryId, active: true })
     .sort({ order: 1, name: 1 })
     .lean();

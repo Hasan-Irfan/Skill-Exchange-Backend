@@ -7,13 +7,17 @@ import Review from "../model/review.model.js";
 export const getUserProfile = async (userId) => {
   const user = await User.findById(userId)
     .select("-password -__v")
+    .populate("skillsOffered", "name category synonyms")
+    .populate("skillsNeeded", "name category synonyms")
     .lean();
 
   if (!user) throw new Error("User not found");
 
   // Fetch user’s listings
   const listings = await Listing.find({ owner: userId, active: true })
-    .populate("skill", "name")
+    .populate("category", "name")
+    .populate("skillsOffered", "name category")
+    .populate("skillsNeeded", "name category")
     .lean();
 
   // Fetch reviews summary
@@ -44,13 +48,54 @@ export const updateUserProfile = async (userId, data) => {
   ];
 
   const updateData = {};
-  allowedFields.forEach((f) => {
-    if (data[f] !== undefined) updateData[f] = data[f];
+  allowedFields.forEach((field) => {
+    if (data[field] !== undefined) {
+      // Handle arrays - check if it's a JSON string or already an array
+      if (field === 'skillsOffered' || field === 'skillsNeeded') {
+        if (typeof data[field] === 'string') {
+          try {
+            updateData[field] = JSON.parse(data[field]);
+          } catch (e) {
+            // If parsing fails, try to extract from FormData array format
+            const keys = Object.keys(data).filter(key => key.startsWith(`${field}[`));
+            if (keys.length > 0) {
+              updateData[field] = keys
+                .sort()
+                .map(key => data[key])
+                .filter(val => val);
+            } else {
+              updateData[field] = [];
+            }
+          }
+        } else if (Array.isArray(data[field])) {
+          updateData[field] = data[field];
+        }
+      }
+      // Handle nested objects - check if it's a JSON string
+      else if (field === 'location' || field === 'availability' || field === 'portfolioLinks' || field === 'notificationPrefs') {
+        if (typeof data[field] === 'string') {
+          try {
+            updateData[field] = JSON.parse(data[field]);
+          } catch (e) {
+            // Keep as is if parsing fails
+            updateData[field] = data[field];
+          }
+        } else {
+          updateData[field] = data[field];
+        }
+      }
+      // Handle simple fields
+      else {
+        updateData[field] = data[field];
+      }
+    }
   });
 
   const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
     new: true,
   })
+    .populate("skillsOffered", "name category synonyms")
+    .populate("skillsNeeded", "name category synonyms")
     .select("-password -__v")
     .lean();
 
