@@ -5,6 +5,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import User from './src/model/user.model.js';
+import { setIO, getUserRoom } from './src/utils/socket.js';
 
 dotenv.config({
   path: '.env'
@@ -21,6 +22,8 @@ const io = new Server(server, {
     credentials: true
   }
 });
+
+setIO(io);
 
 io.use(async (socket, next) => {
   try {
@@ -45,6 +48,10 @@ io.use(async (socket, next) => {
     const user = await User.findById(decoded?._id).select('_id username roles');
     if (!user) return next(new Error('Unauthorized'));
     socket.user = { id: String(user._id), username: user.username, roles: user.roles };
+    const userRoom = getUserRoom(socket.user.id);
+    if (userRoom) {
+      socket.join(userRoom);
+    }
     next();
   } catch (e) {
     if (e?.name === 'TokenExpiredError') return next(new Error('Session expired'));

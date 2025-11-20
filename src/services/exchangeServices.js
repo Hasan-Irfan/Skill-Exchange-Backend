@@ -4,6 +4,7 @@ import Exchange from "../model/exchange.model.js";
 import Listing from "../model/listing.model.js";
 import { Thread } from "../model/thread.model.js";
 import { refundPaymentService, createEscrowPaymentService, captureEscrowPaymentService } from "./paymentService.js";
+import { sendExchangeNotification } from "./notificationService.js";
 
 /**
  * Create new exchange request
@@ -107,6 +108,9 @@ export const createExchangeService = async (initiatorId, data) => {
     out = exchange.toObject();
   });
   session.endSession();
+  if (out) {
+    await sendExchangeNotification(out, "created", initiatorId);
+  }
   return out;
 };
 
@@ -118,6 +122,7 @@ export const createExchangeService = async (initiatorId, data) => {
 export const updateStatusService = async (user, exchangeId, action) => {
   const session = await mongoose.startSession();
   let out;
+  let notificationAction = null;
   
   await session.withTransaction(async () => {
     const exchange = await Exchange.findById(exchangeId).session(session);
@@ -141,9 +146,11 @@ export const updateStatusService = async (user, exchangeId, action) => {
       exchange.thread = thread[0]._id;
       exchange.status = "accepted_initial";
       exchange.audit.push({ at: new Date(), by: user.id, action: "accepted" });
+      notificationAction = "accepted";
     } else if (action === "decline") {
       exchange.status = "declined";
       exchange.audit.push({ at: new Date(), by: user.id, action: "declined" });
+      notificationAction = "declined";
     } else {
       throw new Error("Invalid action");
     }
@@ -153,6 +160,9 @@ export const updateStatusService = async (user, exchangeId, action) => {
   });
   
   session.endSession();
+  if (out && notificationAction) {
+    await sendExchangeNotification(out, notificationAction, user.id);
+  }
   return out;
 };
 
@@ -167,6 +177,8 @@ export const updateStatusService = async (user, exchangeId, action) => {
 export const signAgreementService = async (user, exchangeId, agreementData = {}) => {
   const session = await mongoose.startSession();
   let out;
+  let newSignature = false;
+  let agreementCompleted = false;
   await session.withTransaction(async () => {
     const exchange = await Exchange.findById(exchangeId).session(session);
     if (!exchange) throw new Error("Exchange not found");
@@ -260,6 +272,7 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
       if (!already) {
         exchange.agreement.signedBy.push(user.id);
         exchange.audit.push({ at: new Date(), by: user.id, action: "agreement_signed_by_user" });
+        newSignature = true;
       }
     }
 
@@ -291,12 +304,21 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
 
       exchange.status = "agreement_signed";
       exchange.audit.push({ at: new Date(), by: user.id, action: "agreement_fully_signed" });
+      agreementCompleted = true;
     }
 
     await exchange.save({ session });
     out = exchange.toObject();
   });
   session.endSession();
+  if (out) {
+    if (newSignature) {
+      await sendExchangeNotification(out, "agreement_signed_by_user", user.id);
+    }
+    if (agreementCompleted) {
+      await sendExchangeNotification(out, "agreement_fully_signed", user.id);
+    }
+  }
   return out;
 };
 
@@ -431,6 +453,9 @@ export const fundEscrowService = async (user, exchangeId, amount, currency = "PK
     out = updatedExchange.toObject();
   });
   session.endSession();
+  if (out) {
+    await sendExchangeNotification(out, "escrow_funded", user.id);
+  }
   return out;
 };
 
@@ -455,7 +480,7 @@ export const startExchangeService = async (exchangeId, user) => {
 
   // Idempotency: if already in progress or completed, return early
   if (exchange.status === "in_progress" || exchange.status === "completed") {
-    throw new Error("Exchange already in progress or completed");
+    return exchange.toObject();
   }
 
   // Check if exchange can be started based on type
@@ -476,7 +501,9 @@ export const startExchangeService = async (exchangeId, user) => {
   exchange.audit.push({ at: new Date(), by: user.id, action: "started" });
 
   await exchange.save();
-  return exchange.toObject();
+  const result = exchange.toObject();
+  await sendExchangeNotification(result, "started", user.id);
+  return result;
 };
 
 /**
@@ -485,6 +512,8 @@ export const startExchangeService = async (exchangeId, user) => {
 export const confirmCompleteService = async (user, exchangeId) => {
   const session = await mongoose.startSession();
   let out;
+  let newConfirmation = false;
+  let completedNow = false;
   await session.withTransaction(async () => {
     const exchange = await Exchange.findById(exchangeId).session(session);
     if (!exchange) throw new Error("Exchange not found");
@@ -521,12 +550,14 @@ export const confirmCompleteService = async (user, exchangeId) => {
     // Only add audit entry if this is a new confirmation
     if (isNewConfirmation) {
       exchange.audit.push({ at: new Date(), by: user.id, action: "confirmed_completion" });
+      newConfirmation = true;
     }
 
     if (current.initiator && current.receiver) {
       exchange.status = "completed";
       exchange.completedAt = new Date();
       exchange.audit.push({ at: new Date(), by: user.id, action: "completed" });
+      completedNow = true;
 
       // Capture escrow payment using payment service (centralized logic)
       // This handles payment status update, payee assignment, and user stats
@@ -568,6 +599,14 @@ export const confirmCompleteService = async (user, exchangeId) => {
     out = exchange.toObject();
   });
   session.endSession();
+  if (out) {
+    if (newConfirmation) {
+      await sendExchangeNotification(out, "confirmed_completion", user.id);
+    }
+    if (completedNow) {
+      await sendExchangeNotification(out, "completed", user.id);
+    }
+  }
   return out;
 };
 
@@ -615,6 +654,9 @@ export const cancelExchangeService = async (user, exchangeId) => {
     out = exchange.toObject();
   });
   session.endSession();
+  if (out) {
+    await sendExchangeNotification(out, "cancelled", user.id);
+  }
   return out;
 };
 
@@ -639,7 +681,9 @@ export const disputeExchangeService = async (user, exchangeId, reason) => {
   exchange.audit.push({ at: new Date(), by: user.id, action: "disputed" });
 
   await exchange.save();
-  return exchange.toObject();
+  const result = exchange.toObject();
+  await sendExchangeNotification(result, "disputed", user.id);
+  return result;
 };
 
 export const resolveDisputeService = async (user, exchangeId, resolution) => {
@@ -651,7 +695,9 @@ export const resolveDisputeService = async (user, exchangeId, resolution) => {
   exchange.status = "resolved";
   exchange.audit.push({ at: new Date(), by: user.id, action: "resolved" });
   await exchange.save();
-  return exchange.toObject();
+  const result = exchange.toObject();
+  await sendExchangeNotification(result, "resolved", user.id);
+  return result;
 };
 
 /**
