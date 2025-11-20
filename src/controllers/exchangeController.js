@@ -98,3 +98,12 @@ export const getExchange = async (req, res) => {
         res.status(404).json({ success: false, message: err.message });
     }
 };
+
+export const getUserExchanges = async (req, res) => {
+    try {
+        const exchanges = await getExchangeService(null, req.user.id);
+        res.json({ success: true, data: exchanges });
+    } catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+};

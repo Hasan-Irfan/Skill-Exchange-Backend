@@ -18,6 +18,15 @@ export const listMyThreads = async (userId, { limit = 20, page = 1 } = {}) => {
         { path: "request.listing", select: "title type" }
       ]
     })
+    .populate({
+      path: "exchange",
+      select: "status type initiator receiver offer request agreement monetary confirmations createdAt updatedAt",
+      populate: [
+        { path: "initiator", select: "username avatarUrl" },
+        { path: "receiver", select: "username avatarUrl" },
+        { path: "request.listing", select: "title type" }
+      ]
+    })
     .lean();
 
   // Optionally fetch last message preview
@@ -40,6 +49,15 @@ export const listMyThreads = async (userId, { limit = 20, page = 1 } = {}) => {
       exchange,
     };
   });
+  return threads.map(t => {
+    const lastMessage = messageMap.get(String(t._id)) || null;
+    // Ensure exchange field is always present (even if null or undefined)
+    const exchange = t.exchange !== undefined ? t.exchange : null;
+    
+    return {
+      ...t,
+      lastMessage,
+      exchange,
+    };
+  });
 };
-
-
