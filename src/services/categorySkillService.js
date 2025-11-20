@@ -1,5 +1,6 @@
 import Category from "../model/category.model.js";
 import SkillTag from "../model/skilltag.model.js";
+import mongoose from "mongoose";
 
 // ---------- Helper Validators ----------
 const validateName = (name, field = "Name") => {

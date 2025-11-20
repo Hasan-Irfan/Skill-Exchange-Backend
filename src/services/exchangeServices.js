@@ -46,8 +46,6 @@ export const createExchangeService = async (initiatorId, data) => {
     const receiverId = String(listing.owner);
     if (receiverId === String(initiatorId)) throw new Error("Cannot propose to yourself");
 
-    const thread = await Thread.create([{ participants: [initiatorId, receiverId] }], { session });
-
     const requestSnapshot = {
       title: listing.title,
       skillId: listing.skill,
@@ -79,7 +77,6 @@ export const createExchangeService = async (initiatorId, data) => {
         listingSnapshot: requestSnapshot
       },
       status: "proposed",
-      thread: thread[0]._id,
       audit: [{ at: new Date(), by: initiatorId, action: "created" }]
     };
 
@@ -106,6 +103,7 @@ export const createExchangeService = async (initiatorId, data) => {
     }
 
     const [exchange] = await Exchange.create([exchangeData], { session });
+  
     out = exchange.toObject();
   });
   session.endSession();
@@ -115,30 +113,47 @@ export const createExchangeService = async (initiatorId, data) => {
 /**
  * Accept or decline proposal
  * Only receiver, only from proposed
+ * When accepting, create a thread for communication
  */
 export const updateStatusService = async (user, exchangeId, action) => {
-  const exchange = await Exchange.findById(exchangeId);
-  if (!exchange) throw new Error("Exchange not found");
+  const session = await mongoose.startSession();
+  let out;
+  
+  await session.withTransaction(async () => {
+    const exchange = await Exchange.findById(exchangeId).session(session);
+    if (!exchange) throw new Error("Exchange not found");
 
-  if (exchange.status !== "proposed") {
-    throw new Error("Only proposed exchanges can be accepted or declined");
-  }
-  if (String(exchange.receiver) !== String(user.id)) {
-    throw new Error("Only receiver can respond to proposal");
-  }
+    if (exchange.status !== "proposed") {
+      throw new Error("Only proposed exchanges can be accepted or declined");
+    }
+    if (String(exchange.receiver) !== String(user.id)) {
+      throw new Error("Only receiver can respond to proposal");
+    }
 
-  if (action === "accept") {
-    exchange.status = "accepted_initial";
-    exchange.audit.push({ at: new Date(), by: user.id, action: "accepted" });
-  } else if (action === "decline") {
-    exchange.status = "declined";
-    exchange.audit.push({ at: new Date(), by: user.id, action: "declined" });
-  } else {
-    throw new Error("Invalid action");
-  }
+    if (action === "accept") {
+      // Create thread when exchange is accepted
+      const thread = await Thread.create([{
+        participants: [exchange.initiator, exchange.receiver],
+        exchange: exchange._id
+      }], { session });
 
-  await exchange.save();
-  return exchange.toObject();
+      // Link thread to exchange
+      exchange.thread = thread[0]._id;
+      exchange.status = "accepted_initial";
+      exchange.audit.push({ at: new Date(), by: user.id, action: "accepted" });
+    } else if (action === "decline") {
+      exchange.status = "declined";
+      exchange.audit.push({ at: new Date(), by: user.id, action: "declined" });
+    } else {
+      throw new Error("Invalid action");
+    }
+
+    await exchange.save({ session });
+    out = exchange.toObject();
+  });
+  
+  session.endSession();
+  return out;
 };
 
 /**
@@ -643,15 +658,28 @@ export const resolveDisputeService = async (user, exchangeId, resolution) => {
  * Get exchange details
  * Prefer snapshots for display, still populate live refs when available
  */
-export const getExchangeService = async (exchangeId) => {
-  const exchange = await Exchange.findById(exchangeId)
-    .populate("initiator receiver", "username email avatarUrl")
-    .populate("offer.listing", "title type skill hourlyRate")
-    .populate("request.listing", "title type skill hourlyRate")
-    .populate("thread")
-    .populate("monetary.escrowPaymentId")
-    .lean();
+export const getExchangeService = async (exchangeId, userId) => {
+  if (userId) {
+    const userExchanges = await Exchange.find({ $or: [{ initiator: userId }, { receiver: userId }] })
+      .populate("initiator receiver", "username email avatarUrl")
+      .populate("offer.listing", "title type skill hourlyRate")
+      .populate("request.listing", "title type skill hourlyRate")
+      .populate("thread")
+      .populate("monetary.escrowPaymentId")
+      .populate("status")
+      .lean();
+    return userExchanges;
+  } else {
+    const exchange = await Exchange.findById(exchangeId)
+      .populate("initiator receiver", "username email avatarUrl")
+      .populate("offer.listing", "title type skill hourlyRate")
+      .populate("request.listing", "title type skill hourlyRate")
+      .populate("thread")
+      .populate("monetary.escrowPaymentId")
+      .populate("status")
+      .lean();
 
-  if (!exchange) throw new Error("Exchange not found");
-  return exchange;
+    if (!exchange) throw new Error("Exchange not found");
+    return exchange;
+  }
 };

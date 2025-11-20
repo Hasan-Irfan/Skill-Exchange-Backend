@@ -24,7 +24,21 @@ const io = new Server(server, {
 
 io.use(async (socket, next) => {
   try {
-    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    let token = socket.handshake.auth?.token || socket.handshake.query?.token;
+
+    // Fallback to cookies when auth token isn't provided explicitly
+    if (!token) {
+      const cookieHeader = socket.handshake.headers?.cookie;
+      if (cookieHeader) {
+        const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+          const [key, ...val] = cookie.trim().split('=');
+          acc[key] = decodeURIComponent(val.join('='));
+          return acc;
+        }, {});
+        token = cookies.accessToken;
+      }
+    }
+
     if (!token) return next(new Error('Unauthorized'));
 
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
@@ -108,4 +122,3 @@ connectDB()
 // ).catch((error)=>{
 //   console.error("MONGO Connection ERROR", error);
 // });
-
