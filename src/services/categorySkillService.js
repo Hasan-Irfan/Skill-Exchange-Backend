@@ -1,4 +1,5 @@
 import Category from "../model/category.model.js";
+import mongoose from "mongoose";
 import SkillTag from "../model/skilltag.model.js";
 
 // ---------- Helper Validators ----------
