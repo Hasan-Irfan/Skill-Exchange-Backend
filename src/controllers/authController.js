@@ -9,20 +9,35 @@ import {
   updateUserPassword,
 } from "../services/authServices.js";
 
+const accessTokenCookieOptions = {
+  httpOnly: true,
+  secure: false,
+  sameSite: "lax",
+  maxAge: 45 * 60 * 1000
+};
+
+const refreshTokenCookieOptions = {
+  httpOnly: true,
+  secure: false,
+  sameSite: "lax",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
 // Login
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const result = await loginUser(email, password);
 
-  if (result.error) return res.status(400).json({ success: false, message: result.error });
+  if (result.error) {
+    return res.status(400).json({ success: false, message: result.error });
+  }
 
   const { user, accessToken, refreshToken } = result;
-  const options = { httpOnly: true, secure: true };
 
   res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, accessTokenCookieOptions)
+    .cookie("refreshToken", refreshToken, refreshTokenCookieOptions)
     .json({
       success: true,
       message: "Logged in successfully",
@@ -37,6 +52,7 @@ export const login = asyncHandler(async (req, res) => {
       location: user.location,
     });
 });
+
 
 // Signup
 export const Signup = asyncHandler(async (req, res) => {
@@ -59,27 +75,36 @@ export const verifyEmail = asyncHandler(async (req, res) => {
 // Logout
 export const logout = asyncHandler(async (req, res) => {
   const result = await logoutUser(req.user._id);
-  const options = { httpOnly: true, secure: true };
 
   res
     .status(200)
-    .clearCookie("accessToken", options)
-    .clearCookie("refreshToken", options)
+    .clearCookie("accessToken", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+    })
+    .clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+    })
     .json({ success: true, message: result.message });
 });
 
 // Refresh token
 export const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
   const result = await refreshTokenService(incomingRefreshToken);
 
-  if (result.error) return res.status(401).json({ success: false, message: result.error });
+  if (result.error) {
+    return res.status(401).json({ success: false, message: result.error });
+  }
 
-  const options = { httpOnly: true, secure: true };
   res
     .status(200)
-    .cookie("accessToken", result.accessToken, options)
-    .cookie("refreshToken", result.refreshToken, options)
+    .cookie("accessToken", result.accessToken, accessTokenCookieOptions)
+    .cookie("refreshToken", result.refreshToken, refreshTokenCookieOptions)
     .json({ success: true, ...result });
 });
 

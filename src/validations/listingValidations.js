@@ -5,6 +5,7 @@ export const listingSchema = Joi.object({
   title: Joi.string().min(3).max(100).required(),
   description: Joi.string().max(1000).required(),
   type: Joi.string().valid("offer", "need").required(),
+  category: Joi.array().required(),
   skillsOffered: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
   skillsNeeded: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
   experienceLevel: Joi.string().valid("beginner", "intermediate", "expert").optional(),
