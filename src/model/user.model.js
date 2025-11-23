@@ -9,8 +9,15 @@ const UserSchema = new Schema({
   avatarUrl: String,
   bio: { type: String, maxlength: 1000 },
 
-  roles: [{ type: String, enum: ["user", "admin"], default: "user" }],
-  status: { type: String, enum: ["active", "blocked"], default: "active" },
+  roles: [{ type: String, enum: ["user", "superAdmin", "admin"], default: "user" }],
+  status: { type: String, enum: ["active", "blocked", "suspended"], default: "active" },
+  suspension: {
+    reason: String,
+    suspendedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    suspendedAt: Date,
+    suspendedUntil: Date, // null for permanent suspension
+    isPermanent: { type: Boolean, default: false }
+  },
 
   skillsOffered: [{ type: Schema.Types.ObjectId, ref: "SkillTag" }],
   skillsNeeded: [{ type: Schema.Types.ObjectId, ref: "SkillTag" }],
@@ -32,13 +39,12 @@ const UserSchema = new Schema({
     count: { type: Number, default: 0 },
   },
 
-  // Payment tracking for dashboard
   payments: {
-    totalReceived: { type: Number, default: 0 }, // Total amount received across all exchanges
-    totalPaid: { type: Number, default: 0 }, // Total amount paid across all exchanges
-    receivedCount: { type: Number, default: 0 }, // Number of payments received
-    paidCount: { type: Number, default: 0 }, // Number of payments made
-    currency: { type: String, default: "PKR" } // Primary currency (can be extended for multi-currency)
+    totalReceived: { type: Number, default: 0 }, 
+    totalPaid: { type: Number, default: 0 }, 
+    receivedCount: { type: Number, default: 0 }, 
+    paidCount: { type: Number, default: 0 }, 
+    currency: { type: String, default: "PKR" } 
   },
 
   notificationPrefs: {

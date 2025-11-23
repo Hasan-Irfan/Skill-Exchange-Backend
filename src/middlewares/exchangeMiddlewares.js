@@ -34,7 +34,7 @@ export const checkExchangeAccess = [
       const { exchange } = req;
       const isInitiator = String(exchange.initiator) === userId;
       const isReceiver  = String(exchange.receiver)  === userId;
-      const isAdmin     = Array.isArray(req.user?.roles) && req.user.roles.includes("admin");
+      const isAdmin     = Array.isArray(req.user?.roles) && (req.user.roles.includes("admin") || req.user.roles.includes("superAdmin"));
 
       if (!isInitiator && !isReceiver && !isAdmin) {
         return res.status(403).json({ success: false, message: "Access denied to this exchange" });
@@ -61,7 +61,7 @@ export const checkExchangeReceiver = [
 
       const { exchange } = req;
       const isReceiver = String(exchange.receiver) === userId;
-      const isAdmin = Array.isArray(req.user?.roles) && req.user.roles.includes("admin");
+      const isAdmin = Array.isArray(req.user?.roles) && (req.user.roles.includes("admin") || req.user.roles.includes("superAdmin"));
 
       if (!isReceiver && !isAdmin) {
         return res.status(403).json({ success: false, message: "Only the receiver can perform this action" });
@@ -88,7 +88,7 @@ export const checkExchangeInitiator = [
 
       const { exchange } = req;
       const isInitiator = String(exchange.initiator) === userId;
-      const isAdmin = Array.isArray(req.user?.roles) && req.user.roles.includes("admin");
+      const isAdmin = Array.isArray(req.user?.roles) && (req.user.roles.includes("admin") || req.user.roles.includes("superAdmin"));
 
       if (!isInitiator && !isAdmin) {
         return res.status(403).json({ success: false, message: "Only the initiator can perform this action" });

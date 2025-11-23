@@ -62,7 +62,7 @@ export const registerUser = async (username, email, password) => {
     username,
     email,
     password: hashedPassword,
-    roles: email === process.env.ADMIN_EMAIL ? ["admin"] : ["user"],
+    roles: email === process.env.ADMIN_EMAIL ? ["superAdmin"] : ["user"],
     status: "active",
     isVerified: false,
     rating: {
