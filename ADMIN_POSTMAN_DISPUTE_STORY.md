@@ -33,6 +33,209 @@ Add the header: `Authorization: Bearer {{TOKEN_*}}` in each request.
 
 ---
 
+## 📋 Scenario: Monetary Dispute (Offer Listing)
+
+**Characters**
+- **User A – Alice (initiator/buyer)**
+- **User B – Bob (listing owner/seller)**
+- **User C – Chloe (admin/superAdmin)**
+
+**Goal**: Walk through every request as if you were running a Postman collection, matching the style of `MONETARY_EXCHANGE_UI_FLOW.md`. Each step shows the exact body and expected response so you can copy/paste into Postman.
+
+### **STEP 1: Alice creates exchange** 👤➡️📄
+**API**: `POST /api/v1/exchanges`  
+**Service**: `createExchangeService`
+```json
+{
+  "requestListing": "{{LISTING_OFFER_ID}}",
+  "type": "monetary",
+  "monetary": { "currency": "PKR", "totalAmount": 5000 },
+  "notes": "Need 5 hours of tutoring"
+}
+```
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "{{EXCHANGE_ID}}",
+    "status": "proposed",
+    "type": "monetary",
+    "request": { "listing": "{{LISTING_OFFER_ID}}" },
+    "monetary": { "currency": "PKR", "totalAmount": 5000 }
+  }
+}
+```
+
+### **STEP 2: Bob accepts proposal** ✅
+**API**: `POST /api/v1/exchanges/{{EXCHANGE_ID}}/accept`  
+**Body**: `{}`  
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "{{EXCHANGE_ID}}",
+    "status": "accepted_initial",
+    "audit": [
+      { "action": "created", "by": "{{USER_A}}" },
+      { "action": "accepted", "by": "{{USER_B}}" }
+    ]
+  }
+}
+```
+
+### **STEP 3: Agreement signed (both users)** ✍️
+**API**: `POST /api/v1/exchanges/{{EXCHANGE_ID}}/sign-agreement`
+
+- Alice signs first:
+```json
+{
+  "signed": true,
+  "monetary": { "totalAmount": 5000, "currency": "PKR" },
+  "type": "monetary",
+  "newTerms": ["Provide 5 hours tutoring"]
+}
+```
+- Bob signs second:
+```json
+{ "signed": true }
+```
+**Response after second signature**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "{{EXCHANGE_ID}}",
+    "status": "agreement_signed",
+    "agreement": { "signedBy": ["{{USER_A}}","{{USER_B}}"] }
+  }
+}
+```
+
+### **STEP 4: Alice funds escrow** 💰
+**API**: `POST /api/v1/exchanges/{{EXCHANGE_ID}}/fund-escrow`
+```json
+{ "amount": 5000 }
+```
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "{{EXCHANGE_ID}}",
+    "status": "escrow_funded",
+    "monetary": {
+      "currency": "PKR",
+      "totalAmount": 5000,
+      "escrowPaymentId": "{{PAYMENT_ID}}"
+    }
+  }
+}
+```
+
+### **STEP 5: Bob starts exchange** 🚀
+`POST /api/v1/exchanges/{{EXCHANGE_ID}}/start` → `{ "success": true, "data": { "status": "in_progress" } }`
+
+### **STEP 6: Bob disputes completion** ⚠️
+**API**: `POST /api/v1/exchanges/{{EXCHANGE_ID}}/dispute`
+```json
+{ "reason": "Tutor missed 3 sessions" }
+```
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "{{EXCHANGE_ID}}",
+    "status": "disputed",
+    "dispute": {
+      "raisedBy": "{{USER_B}}",
+      "reason": "Tutor missed 3 sessions"
+    }
+  }
+}
+```
+
+### **STEP 7: Bob files a report (optional but recommended)** 📝
+**API**: `POST /api/v1/reports`
+```json
+{
+  "againstUser": "{{USER_A}}",
+  "exchange": "{{EXCHANGE_ID}}",
+  "type": "fraud",
+  "description": "Tutor collected money but skipped sessions",
+  "evidence": ["https://proof.example/chat.png"]
+}
+```
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "{{REPORT_ID}}",
+    "status": "open",
+    "priority": "urgent"
+  }
+}
+```
+
+### **STEP 8: Admin Chloe lists open disputes** 👩‍⚖️
+**API**: `GET /api/v1/admin/reports?status=open&priority=urgent`
+
+### **STEP 9: Admin assigns report** 📌
+`POST /api/v1/admin/reports/{{REPORT_ID}}/assign` → `{ "success": true, "data": { "status": "under_review", "assignedTo": "{{ADMIN_ID}}" } }`
+
+### **STEP 10: Admin resolves exchange dispute** 🧾
+**API**: `POST /api/v1/admin/exchanges/{{EXCHANGE_ID}}/resolve-dispute`
+```json
+{
+  "paymentAction": "refund",
+  "reason": "Tutor missed sessions; refunding payer",
+  "note": "Evidence supports Bob"
+}
+```
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "{{EXCHANGE_ID}}",
+    "status": "resolved",
+    "audit": [
+      { "action": "admin_resolved_dispute", "by": "{{ADMIN_ID}}" }
+    ]
+  }
+}
+```
+
+### **STEP 11: Admin closes report and suspends user** 🔒
+**Update report**
+```
+PATCH /api/v1/admin/reports/{{REPORT_ID}}
+{
+  "status": "resolved",
+  "actionTaken": "suspend",
+  "resolution": "Suspended Alice for 7 days",
+  "note": "Repeated no-shows"
+}
+```
+**Suspend user**
+```
+POST /api/v1/admin/manage-user-status
+{
+  "targetUserId": "{{USER_A}}",
+  "action": "suspend",
+  "duration": 7,
+  "durationUnit": "days",
+  "reason": "Repeated disputes"
+}
+```
+
+This step-by-step mirrors the UI-guide style with explicit Postman-ready bodies and expected responses. The rest of the document dives deeper into variations.
+
+---
+
 ## 1. Exchange Lifecycle (Monetary Story)
 
 > **Story**: Alice (initiator) wants Bob’s offer listing. They negotiate a monetary exchange, escrow fails, Bob disputes completion, and admin Chloe resolves it.
@@ -253,9 +456,19 @@ Since barter, `paymentAction` is optional and ignored. Admin should additionally
 
 ## 4. Report + Admin Actions Story
 
-> Suppose Bob files a report after resolution claiming repeated fraud.
+> Suppose Bob files a report after or during a dispute to provide evidence against Alice. This is separate from the dispute status and feeds the admin’s report queue. Use reports whenever you need policy enforcement (warnings, suspensions) or want to document behavior outside escrow release logic.
 
-### 4.1 Bob creates report
+### 4.1 When to call dispute vs report
+
+| Situation | API | Body Example |
+|-----------|-----|--------------|
+| Exchange execution must halt and escrow locked | `POST /exchanges/{{ID}}/dispute` | `{ "reason": "Service not delivered" }`
+| No exchange or you simply need to alert admins to misconduct | `POST /reports` | `{ "againstUser": "...", "type": "fraud", "description": "..." }`
+| You already disputed but also want an evidence trail subject to SLA (e.g., repeated fraud) | Call **both**: keep exchange disputed and create a report referencing the same exchange |
+
+In Postman collections, place “Dispute” requests under Exchanges and “Create Report” under Reports. When filling the report body, pass the same `exchangeId` so admins can see the context.
+
+### 4.2 Bob creates report
 ```
 POST /reports
 Authorization: Bearer {{TOKEN_BOB}}
@@ -270,19 +483,19 @@ Body:
 ```
 Auto-priority `urgent`. Report `status: "open"`.
 
-### 4.2 Admin lists urgent reports
+### 4.3 Admin lists urgent reports
 ```
 GET /admin/reports?priority=urgent&status=open&limit=10
 Authorization: Bearer {{TOKEN_ADMIN}}
 ```
 
-### 4.3 Assign report
+### 4.4 Assign report
 ```
 POST /admin/reports/{{REPORT_ID}}/assign
 Authorization: Bearer {{TOKEN_ADMIN}}
 ```
 
-### 4.4 Update resolution + action
+### 4.5 Update resolution + action
 ```
 PATCH /admin/reports/{{REPORT_ID}}
 Authorization: Bearer {{TOKEN_ADMIN}}
@@ -296,7 +509,7 @@ Body:
 }
 ```
 
-### 4.5 (Optional) Suspend Alice
+### 4.6 (Optional) Suspend Alice
 ```
 POST /admin/manage-user-status
 Authorization: Bearer {{TOKEN_ADMIN}}
