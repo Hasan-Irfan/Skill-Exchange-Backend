@@ -312,7 +312,7 @@ export const updateReportService = async (adminId, reportId, updates) => {
  * Admin resolve dispute with payment control
  * Only admins can perform this action
  */
-export const adminResolveDisputeService = async (adminId, exchangeId, resolution) => {
+export const adminResolveDisputeService = async (adminId, exchangeId, resolution = {}) => {
   const session = await mongoose.startSession();
   let out;
   
@@ -327,6 +327,11 @@ export const adminResolveDisputeService = async (adminId, exchangeId, resolution
 
     if (exchange.status !== "disputed") {
       throw new Error("Exchange is not in disputed status");
+    }
+
+    const isMonetaryExchange = ["monetary", "hybrid"].includes(exchange.type);
+    if (isMonetaryExchange && !resolution.paymentAction) {
+      throw new Error("paymentAction is required for monetary or hybrid disputes");
     }
 
     // Update exchange status

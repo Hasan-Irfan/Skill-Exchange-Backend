@@ -25,6 +25,22 @@ export const loginUser = async (email, password) => {
   const user = await User.findOne({ email });
   if (!user) return { error: "User not found" };
 
+  if (user.status === "blocked") {
+    return { error: "Your account has been blocked. Contact support." };
+  }
+
+  if (user.status === "suspended") {
+    const until = user?.suspension?.suspendedUntil;
+    if (!until || new Date() < new Date(until)) {
+      const untilMsg = until ? ` until ${new Date(until).toLocaleString()}` : "";
+      return { error: `Your account is suspended${untilMsg}.` };
+    }
+    // suspension expired: clear it
+    user.status = "active";
+    user.suspension = undefined;
+    await user.save();
+  }
+
   if (!user.isVerified)
     return { error: "Please verify your email before logging in" };
 
