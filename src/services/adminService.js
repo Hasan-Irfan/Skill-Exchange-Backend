@@ -5,7 +5,7 @@ import Exchange from "../model/exchange.model.js";
 import Payment from "../model/payment.model.js";
 import Listing from "../model/listing.model.js";
 import { refundPaymentService, captureEscrowPaymentService } from "./paymentService.js";
-import { sendExchangeNotification } from "./notificationService.js";
+import { sendExchangeNotification, sendUserNotification } from "./notificationService.js";
 
 /**
  * Check if user is superAdmin
@@ -28,6 +28,7 @@ const isAdmin = (user) => {
 export const manageAdminRoleService = async (superAdminId, targetUserId, action, role = null) => {
   const session = await mongoose.startSession();
   let out;
+  let notificationPayload = null;
   
   await session.withTransaction(async () => {
     const superAdmin = await User.findById(superAdminId).session(session);
@@ -67,9 +68,32 @@ export const manageAdminRoleService = async (superAdminId, targetUserId, action,
 
     await targetUser.save({ session });
     out = targetUser.toObject();
+
+    if (action === "promote") {
+      notificationPayload = {
+        title: "Admin privileges granted",
+        body: "You have been promoted to admin by the super admin.",
+        data: { roles: out.roles, action: "promote" }
+      };
+    } else if (action === "demote") {
+      notificationPayload = {
+        title: "Admin role removed",
+        body: "Your admin privileges have been revoked.",
+        data: { roles: out.roles, action: "demote" }
+      };
+    } else if (action === "update") {
+      notificationPayload = {
+        title: "Role updated",
+        body: `Your account role has been updated to ${role}.`,
+        data: { roles: out.roles, action: "update" }
+      };
+    }
   });
   
   session.endSession();
+  if (out && notificationPayload) {
+    await sendUserNotification(out._id, notificationPayload.title, notificationPayload.body, notificationPayload.data);
+  }
   return out;
 };
 
@@ -80,6 +104,7 @@ export const manageAdminRoleService = async (superAdminId, targetUserId, action,
 export const manageUserStatusService = async (adminId, targetUserId, action, data = {}) => {
   const session = await mongoose.startSession();
   let out;
+  let notificationPayload = null;
   
   await session.withTransaction(async () => {
     const admin = await User.findById(adminId).session(session);
@@ -108,6 +133,11 @@ export const manageUserStatusService = async (adminId, targetUserId, action, dat
         suspendedUntil: null,
         isPermanent: true
       };
+      notificationPayload = {
+        title: "Account blocked",
+        body: data.reason || "Your account has been blocked by an administrator.",
+        data: { action: "block" }
+      };
     } else if (action === "suspend") {
       if (!data.duration || !data.durationUnit) {
         throw new Error("Duration and durationUnit are required for suspension");
@@ -133,9 +163,19 @@ export const manageUserStatusService = async (adminId, targetUserId, action, dat
         suspendedUntil: suspendedUntil,
         isPermanent: false
       };
+      notificationPayload = {
+        title: "Account suspended",
+        body: `${data.reason || "You have been suspended by an administrator."} ${data.duration ? `Duration: ${data.duration} ${data.durationUnit}` : ""}`.trim(),
+        data: { action: "suspend", suspendedUntil }
+      };
     } else if (action === "unblock" || action === "unsuspend") {
       targetUser.status = "active";
       targetUser.suspension = undefined;
+      notificationPayload = {
+        title: "Access restored",
+        body: "Your account access has been restored. You can now log in again.",
+        data: { action }
+      };
     } else {
       throw new Error("Invalid action. Must be 'block', 'suspend', 'unblock', or 'unsuspend'");
     }
@@ -145,6 +185,9 @@ export const manageUserStatusService = async (adminId, targetUserId, action, dat
   });
   
   session.endSession();
+  if (out && notificationPayload) {
+    await sendUserNotification(out._id, notificationPayload.title, notificationPayload.body, notificationPayload.data);
+  }
   return out;
 };
 
@@ -213,6 +256,7 @@ export const getReportService = async (reportId) => {
 export const assignReportService = async (adminId, reportId) => {
   const session = await mongoose.startSession();
   let out;
+  let reporterToNotify = null;
   
   await session.withTransaction(async () => {
     const admin = await User.findById(adminId).session(session);
@@ -235,11 +279,20 @@ export const assignReportService = async (adminId, reportId) => {
       note: `Assigned to admin`
     });
 
+    reporterToNotify = report.reporter;
     await report.save({ session });
     out = report.toObject();
   });
   
   session.endSession();
+  if (out && reporterToNotify) {
+    await sendUserNotification(
+      reporterToNotify,
+      "Report under review",
+      "An administrator has started reviewing your report.",
+      { reportId: out._id }
+    );
+  }
   return out;
 };
 
@@ -249,6 +302,8 @@ export const assignReportService = async (adminId, reportId) => {
 export const updateReportService = async (adminId, reportId, updates) => {
   const session = await mongoose.startSession();
   let out;
+  let reporterToNotify = null;
+  let reporterMessage = null;
   
   await session.withTransaction(async () => {
     const admin = await User.findById(adminId).session(session);
@@ -300,11 +355,25 @@ export const updateReportService = async (adminId, reportId, updates) => {
       note: updates.note || "Report updated by admin"
     });
 
+    reporterToNotify = report.reporter;
+    const statusMsg = updates.status ? `Status updated to ${updates.status}.` : "";
+    const resolutionMsg = updates.resolution ? `Resolution: ${updates.resolution}.` : "";
+    const actionMsg = updates.actionTaken ? `Action taken: ${updates.actionTaken}.` : "";
+    reporterMessage = [statusMsg, resolutionMsg, actionMsg].filter(Boolean).join(" ").trim();
+
     await report.save({ session });
     out = report.toObject();
   });
   
   session.endSession();
+  if (out && reporterToNotify) {
+    await sendUserNotification(
+      reporterToNotify,
+      "Report updated",
+      reporterMessage || "An administrator updated your report.",
+      { reportId: out._id }
+    );
+  }
   return out;
 };
 

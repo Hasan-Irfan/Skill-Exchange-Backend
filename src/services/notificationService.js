@@ -50,6 +50,14 @@ const ACTION_TEMPLATES = {
     title: "Exchange resolved",
     body: () => "The exchange dispute has been resolved.",
   },
+  admin_resolved_dispute: {
+    title: "Dispute resolved by admin",
+    body: () => "Our team reviewed your dispute and made a final decision.",
+  },
+  admin_payment_intervention: {
+    title: "Payment update",
+    body: () => "An admin intervened in the payment linked to your exchange.",
+  },
 };
 
 const uniqueObjectIdStrings = (ids = []) => [...new Set(ids.filter(Boolean).map(String))];
@@ -142,6 +150,22 @@ export const sendExchangeNotification = async (exchange, action, actorId, extraD
     emitNotifications(notifications);
   } catch (err) {
     console.error(`Failed to send ${action} notification`, err);
+  }
+};
+
+export const sendUserNotification = async (userId, title, body, data = {}, type = "SYSTEM") => {
+  try {
+    if (!userId || !title || !body) return;
+    const payload = await Notification.create({
+      user: userId,
+      type,
+      title,
+      body,
+      data,
+    });
+    emitNotifications([payload]);
+  } catch (err) {
+    console.error("Failed to send user notification", err);
   }
 };
 
