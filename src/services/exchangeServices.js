@@ -692,7 +692,7 @@ export const resolveDisputeService = async (user, exchangeId, resolution) => {
   if (String(exchange.initiator) !== String(user.id) && String(exchange.receiver) !== String(user.id)) {
     throw new Error("Unauthorized");
   }
-  exchange.status = "resolved";
+  exchange.status = "in_progress";
   exchange.audit.push({ at: new Date(), by: user.id, action: "resolved" });
   await exchange.save();
   const result = exchange.toObject();
