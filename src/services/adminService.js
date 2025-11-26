@@ -405,11 +405,22 @@ export const adminResolveDisputeService = async (adminId, exchangeId, resolution
 
     // Update exchange status
     exchange.status = "resolved";
+    const resolutionNote = resolution.note || resolution.reason || "Dispute resolved by admin";
+    const paymentAction = resolution.paymentAction || "none";
+
+    exchange.dispute = exchange.dispute || {};
+    exchange.dispute.adminResolution = {
+      resolvedBy: adminId,
+      resolvedAt: new Date(),
+      paymentAction,
+      note: resolutionNote
+    };
+
     exchange.audit.push({
       at: new Date(),
       by: adminId,
       action: "admin_resolved_dispute",
-      note: resolution.note || "Dispute resolved by admin"
+      note: resolutionNote
     });
 
     // Handle payment based on resolution
@@ -623,6 +634,24 @@ export const getUserDetailsService = async (userId) => {
 
   if (!user) throw new Error("User not found");
   return user;
+};
+
+export const getDisputedExchangesService = async ({ limit = 20, skip = 0 } = {}) => {
+  const query = { status: "disputed" };
+  const [exchanges, total] = await Promise.all([
+    Exchange.find(query)
+      .populate("initiator", "username email")
+      .populate("receiver", "username email")
+      .populate("dispute.raisedBy", "username email")
+      .populate("request.listing", "title type")
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Exchange.countDocuments(query)
+  ]);
+
+  return { exchanges, total, limit, skip };
 };
 
 /**

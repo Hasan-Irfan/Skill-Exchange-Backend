@@ -20,7 +20,8 @@ import {
   adminPaymentIntervention,
   getUsers,
   getUserDetails,
-  getAdminDashboard
+  getAdminDashboard,
+  getDisputedExchanges
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -42,6 +43,7 @@ router.post("/admin/payment-intervention", roleChecker(["admin", "superAdmin"]),
 router.get("/admin/users", roleChecker(["admin", "superAdmin"]), getUsers);
 router.get("/admin/users/:id", roleChecker(["admin", "superAdmin"]), getUserDetails);
 router.get("/admin/dashboard", roleChecker(["admin", "superAdmin"]), getAdminDashboard);
+router.get("/admin/exchanges/disputed", roleChecker(["admin", "superAdmin"]), getDisputedExchanges);
 
 export default router;
 

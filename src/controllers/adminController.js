@@ -9,7 +9,8 @@ import {
   adminPaymentInterventionService,
   getUsersService,
   getUserDetailsService,
-  getAdminDashboardService
+  getAdminDashboardService,
+  getDisputedExchangesService
 } from "../services/adminService.js";
 
 /**
@@ -164,6 +165,19 @@ export const getAdminDashboard = async (req, res) => {
   try {
     const stats = await getAdminDashboardService();
     res.json({ success: true, data: stats });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+export const getDisputedExchanges = async (req, res) => {
+  try {
+    const filters = {
+      limit: parseInt(req.query.limit) || 20,
+      skip: parseInt(req.query.skip) || 0
+    };
+    const result = await getDisputedExchangesService(filters);
+    res.json({ success: true, data: result });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }

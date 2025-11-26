@@ -47,6 +47,7 @@ import MessageRouter from './routes/messageRoutes.js';
 import ThreadRouter from './routes/threadRoutes.js';
 import ReviewRouter from './routes/reviewRoutes.js';
 import PaymentRouter from './routes/paymentRoutes.js';
+import NotificationRouter from './routes/notificationRoutes.js';
 import AdminRouter from './routes/adminRoutes.js';
 import ReportRouter from './routes/reportRoutes.js';
 
@@ -60,6 +61,7 @@ app.use('/api/v1',MessageRouter);
 app.use('/api/v1',ThreadRouter);
 app.use('/api/v1',ReviewRouter);
 app.use('/api/v1',PaymentRouter);
+app.use('/api/v1',NotificationRouter);
 app.use('/api/v1',AdminRouter);
 app.use('/api/v1',ReportRouter);
 

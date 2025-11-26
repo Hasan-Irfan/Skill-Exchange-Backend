@@ -20,6 +20,18 @@ const ListingSnapshotSchema = new Schema({
   version: Number
 }, { _id: false });
 
+const DisputeSchema = new Schema({
+  raisedBy: { type: Schema.Types.ObjectId, ref: "User" },
+  reason: String,
+  date: Date,
+  adminResolution: {
+    resolvedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    resolvedAt: Date,
+    paymentAction: { type: String, enum: ["release", "refund", "split", "none"] },
+    note: String
+  }
+}, { _id: false });
+
 const ExchangeSchema = new Schema({
   initiator: { type: Schema.Types.ObjectId, ref: "User", required: true },
   receiver:  { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -63,6 +75,8 @@ const ExchangeSchema = new Schema({
     initiator: { type: Boolean, default: false },
     receiver:  { type: Boolean, default: false }
   },
+
+  dispute: DisputeSchema,
 
   audit: [{ at: Date, by: Schema.Types.ObjectId, action: String }]
 }, { timestamps: true });
