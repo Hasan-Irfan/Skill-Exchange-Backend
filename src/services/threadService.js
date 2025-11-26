@@ -15,7 +15,8 @@ export const listMyThreads = async (userId, { limit = 20, page = 1 } = {}) => {
       populate: [
         { path: "initiator", select: "username avatarUrl" },
         { path: "receiver", select: "username avatarUrl" },
-        { path: "request.listing", select: "title type" }
+        { path: "request.listing", select: "title type" },
+        { path: "dispute", select: "status raisedBy reason date adminResolution" }
       ]
     })
     .lean();
