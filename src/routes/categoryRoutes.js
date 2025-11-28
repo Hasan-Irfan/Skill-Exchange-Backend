@@ -22,16 +22,16 @@ const router = express.Router();
 // ---------- Category Routes ----------
 router.get("/categories", getCategories);
 router.get("/categories/:id", getCategoryById);
-router.post("/categories", jwtVerify, roleChecker(["admin"]), validateRequest(categorySchema), createCategory);
-router.put("/categories/:id", jwtVerify, roleChecker(["admin"]), validateRequest(categorySchema), updateCategory);
-router.delete("/categories/:id", jwtVerify, roleChecker(["admin"]), deleteCategory);
+router.post("/categories", jwtVerify, roleChecker(["admin" , "superAdmin"]), validateRequest(categorySchema), createCategory);
+router.put("/categories/:id", jwtVerify, roleChecker(["admin" , "superAdmin"]), validateRequest(categorySchema), updateCategory);
+router.delete("/categories/:id", jwtVerify, roleChecker(["admin" , "superAdmin"]), deleteCategory);
 
 // ---------- Skill Routes ----------
 router.get("/skills", getSkills);
 router.get("/skills/category/:categoryId", getSkillsByCategory);
 router.get("/skills/:id", getSkillById);
-router.post("/skills", jwtVerify, roleChecker(["admin"]), validateRequest(skillSchema), createSkill);
-router.put("/skills/:id", jwtVerify, roleChecker(["admin"]), validateRequest(skillSchema), updateSkill);
-router.delete("/skills/:id", jwtVerify, roleChecker(["admin"]), deleteSkill);
+router.post("/skills", jwtVerify, roleChecker(["admin" , "superAdmin"]), validateRequest(skillSchema), createSkill);
+router.put("/skills/:id", jwtVerify, roleChecker(["admin" , "superAdmin"]), validateRequest(skillSchema), updateSkill);
+router.delete("/skills/:id", jwtVerify, roleChecker(["admin" , "superAdmin"]), deleteSkill);
 
 export default router;
