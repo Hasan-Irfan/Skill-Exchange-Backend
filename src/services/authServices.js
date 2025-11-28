@@ -332,15 +332,30 @@ export const sendResetPasswordEmail = async (email) => {
 };
 
 // Update password
-export const updateUserPassword = async (resetToken, password) => {
-  const decoded = jwt.verify(resetToken, process.env.RESET_TOKEN_SECRET);
-  const user = await User.findById(decoded._id);
+export const updateUserPassword = async ({ resetToken, userId, currentPassword, newPassword }) => {
+  if (resetToken) {
+    const decoded = jwt.verify(resetToken, process.env.RESET_TOKEN_SECRET);
+    const user = await User.findById(decoded._id);
+    if (!user) return { error: "User not found" };
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+    return { message: "Password updated successfully" };
+  }
 
-  if (!user) return { error: "User not found" };
+  if (userId) {
+    if (!currentPassword || !newPassword) {
+      return { error: "Current and new password are required" };
+    }
+    const user = await User.findById(userId);
+    if (!user) return { error: "User not found" };
+    const match = await bcrypt.compare(currentPassword, user.password);
+    if (!match) return { error: "Current password is incorrect" };
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+    return { message: "Password updated successfully" };
+  }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  user.password = hashedPassword;
-  await user.save();
-
-  return { message: "Password updated successfully" };
+  return { error: "Invalid password update request" };
 };

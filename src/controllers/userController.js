@@ -1,4 +1,5 @@
 import { getUserDashboard , getUserProfile , updateUserProfile } from "../services/userService.js";
+import { updateUserPassword } from "../services/authServices.js";
 import cloudinary from "../config/cloudinary.js";
 
 export const getProfile = async (req, res) => {
@@ -49,6 +50,19 @@ export const getDashboard = async (req, res) => {
   try {
     const dashboard = await getUserDashboard(req.user.id);
     res.json({ success: true, data: dashboard });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const result = await updateUserPassword({ userId: req.user.id, currentPassword, newPassword });
+    if (result.error) {
+      return res.status(400).json({ success: false, message: result.error });
+    }
+    res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }

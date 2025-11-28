@@ -32,3 +32,8 @@ export const updateProfileSchema = Joi.object({
     push: Joi.boolean(),
   }),
 });
+
+export const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().min(6).required(),
+  newPassword: Joi.string().min(6).required()
+});

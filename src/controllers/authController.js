@@ -121,7 +121,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
 export const updatePassword = asyncHandler(async (req, res) => {
   const { resetToken } = req.params;
   const { password } = req.body;
-  const result = await updateUserPassword(resetToken, password);
+  const result = await updateUserPassword({ resetToken, newPassword: password });
 
   if (result.error) return res.status(400).json({ success: false, message: result.error });
   res.status(200).json({ success: true, message: result.message });
