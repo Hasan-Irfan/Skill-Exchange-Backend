@@ -1,11 +1,11 @@
 // src/middlewares/roleChecker.js
 export const roleChecker = (requiredRoles) => {
   return (req, res, next) => {
-    const userRoles = req.user?.roles;
-    if (!userRoles || !Array.isArray(userRoles)) {
+    const userRole = req.user?.role;
+    if (!userRole) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-    const hasRequiredRole = requiredRoles.some(role => userRoles.includes(role));
+    const hasRequiredRole = requiredRoles.includes(userRole);
     if (hasRequiredRole) {
       next();
     } else {

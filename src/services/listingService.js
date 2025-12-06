@@ -177,7 +177,7 @@ export const updateListingService = async (user, listingId, data) => {
   const listing = await Listing.findById(listingId);
   if (!listing) throw new Error("Listing not found");
 
-  if (listing.owner.toString() !== user.id && !user.roles?.includes("admin")) {
+  if (listing.owner.toString() !== user.id && user.role !== "admin" && user.role !== "superAdmin") {
     throw new Error("Not authorized to update this listing");
   }
 
@@ -254,7 +254,7 @@ export const deleteListingService = async (user, listingId) => {
   const listing = await Listing.findById(listingId);
   if (!listing) throw new Error("Listing not found");
 
-  if (listing.owner.toString() !== user.id && !user.roles?.includes("admin")) {
+  if (listing.owner.toString() !== user.id && user.role !== "admin" && user.role !== "superAdmin") {
     throw new Error("Not authorized to delete this listing");
   }
 

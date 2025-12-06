@@ -44,7 +44,7 @@ export const login = asyncHandler(async (req, res) => {
       username: user.username,
       userID: user._id,
       email: user.email,
-      roles: user.roles,
+      role: user.role,
       avatarUrl: user.avatarUrl,
       bio: user.bio,
       status: user.status,

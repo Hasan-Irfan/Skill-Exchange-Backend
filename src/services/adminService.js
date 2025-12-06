@@ -11,14 +11,14 @@ import { sendExchangeNotification, sendUserNotification } from "./notificationSe
  * Check if user is superAdmin
  */
 const isSuperAdmin = (user) => {
-  return Array.isArray(user?.roles) && user.roles.includes("superAdmin");
+  return user?.role === "superAdmin";
 };
 
 /**
  * Check if user is admin or superAdmin
  */
 const isAdmin = (user) => {
-  return Array.isArray(user?.roles) && (user.roles.includes("admin") || user.roles.includes("superAdmin"));
+  return user?.role === "admin" || user?.role === "superAdmin";
 };
 
 /**
@@ -41,27 +41,25 @@ export const manageAdminRoleService = async (superAdminId, targetUserId, action,
 
     if (action === "promote") {
       // Promote user to admin
-      if (targetUser.roles.includes("admin") || targetUser.roles.includes("superAdmin")) {
+      if (targetUser.role === "admin" || targetUser.role === "superAdmin") {
         throw new Error("User is already an admin");
       }
-      if (!targetUser.roles.includes("admin")) {
-        targetUser.roles.push("admin");
-      }
+      targetUser.role = "admin";
     } else if (action === "demote") {
       // Remove admin role
-      if (targetUser.roles.includes("superAdmin")) {
+      if (targetUser.role === "superAdmin") {
         throw new Error("Cannot demote superAdmin");
       }
-      targetUser.roles = targetUser.roles.filter(role => role !== "admin");
+      targetUser.role = "user";
     } else if (action === "update") {
       // Update to specific role
       if (!role || !["user", "admin"].includes(role)) {
         throw new Error("Invalid role. Must be 'user' or 'admin'");
       }
-      if (targetUser.roles.includes("superAdmin")) {
+      if (targetUser.role === "superAdmin") {
         throw new Error("Cannot modify superAdmin role");
       }
-      targetUser.roles = [role];
+      targetUser.role = role;
     } else {
       throw new Error("Invalid action. Must be 'promote', 'demote', or 'update'");
     }
@@ -73,19 +71,19 @@ export const manageAdminRoleService = async (superAdminId, targetUserId, action,
       notificationPayload = {
         title: "Admin privileges granted",
         body: "You have been promoted to admin by the super admin.",
-        data: { roles: out.roles, action: "promote" }
+        data: { role: out.role, action: "promote" }
       };
     } else if (action === "demote") {
       notificationPayload = {
         title: "Admin role removed",
         body: "Your admin privileges have been revoked.",
-        data: { roles: out.roles, action: "demote" }
+        data: { role: out.role, action: "demote" }
       };
     } else if (action === "update") {
       notificationPayload = {
         title: "Role updated",
         body: `Your account role has been updated to ${role}.`,
-        data: { roles: out.roles, action: "update" }
+        data: { role: out.role, action: "update" }
       };
     }
   });
@@ -116,11 +114,11 @@ export const manageUserStatusService = async (adminId, targetUserId, action, dat
     if (!targetUser) throw new Error("Target user not found");
 
     // Prevent blocking admins (only superAdmin can block other admins)
-    if (targetUser.roles.includes("admin") && !isSuperAdmin(admin)) {
+    if (targetUser.role === "admin" && !isSuperAdmin(admin)) {
       throw new Error("Only superAdmin can block or suspend other admins");
     }
 
-    if (targetUser.roles.includes("superAdmin")) {
+    if (targetUser.role === "superAdmin") {
       throw new Error("Cannot block or suspend superAdmin");
     }
 
@@ -599,7 +597,7 @@ export const getUsersService = async (filters = {}) => {
   const query = {};
   if (status) query.status = status;
   if (role) {
-    query.roles = role;
+    query.role = role;
   }
   if (search) {
     query.$or = [

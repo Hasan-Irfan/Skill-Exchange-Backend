@@ -49,11 +49,11 @@ io.use(async (socket, next) => {
     if (!token) return next(new Error('Unauthorized'));
 
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    const user = await User.findById(decoded?._id).select('_id username roles');
+    const user = await User.findById(decoded?._id).select('_id username role');
 
     if (!user) return next(new Error('Unauthorized'));
 
-    socket.user = { id: String(user._id), username: user.username, roles: user.roles };
+    socket.user = { id: String(user._id), username: user.username, role: user.role };
 
     // AUTO JOIN USER PRIVATE ROOM
     const userRoom = getUserRoom(socket.user.id);

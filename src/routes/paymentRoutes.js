@@ -24,7 +24,7 @@ const router = express.Router();
 
 // Middleware to check admin access
 const checkAdmin = (req, res, next) => {
-  const isAdmin = req.user?.roles?.includes("admin") || false;
+  const isAdmin = req.user?.role === "admin" || req.user?.role === "superAdmin";
   if (!isAdmin) {
     return res.status(403).json({ success: false, message: "Admin access required" });
   }

@@ -9,7 +9,7 @@ const UserSchema = new Schema({
   avatarUrl: String,
   bio: { type: String, maxlength: 1000 },
 
-  roles: [{ type: String, enum: ["user", "superAdmin", "admin"], default: "user" }],
+  role: { type: String, enum: ["user", "superAdmin", "admin"], default: "user" },
   status: { type: String, enum: ["active", "blocked", "suspended"], default: "active" },
   suspension: {
     reason: String,

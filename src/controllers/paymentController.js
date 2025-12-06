@@ -14,7 +14,7 @@ import {
  */
 export const getPayment = async (req, res) => {
   try {
-    const isAdmin = req.user?.roles?.includes("admin") || false;
+    const isAdmin = req.user?.role === "admin" || req.user?.role === "superAdmin";
     const payment = await getPaymentService(req.params.id, req.user.id, isAdmin);
     res.json({ success: true, data: payment });
   } catch (err) {
@@ -45,7 +45,7 @@ export const getUserPayments = async (req, res) => {
  */
 export const getExchangePayments = async (req, res) => {
   try {
-    const isAdmin = req.user?.roles?.includes("admin") || false;
+    const isAdmin = req.user?.role === "admin" || req.user?.role === "superAdmin";
     const payments = await getExchangePaymentsService(req.params.exchangeId, req.user.id, isAdmin);
     res.json({ success: true, data: payments });
   } catch (err) {
@@ -87,7 +87,7 @@ export const initiateGatewayPayment = async (req, res) => {
  */
 export const updatePaymentStatus = async (req, res) => {
   try {
-    const isAdmin = req.user?.roles?.includes("admin") || false;
+    const isAdmin = req.user?.role === "admin" || req.user?.role === "superAdmin";
     if (!isAdmin) {
       return res.status(403).json({ success: false, message: "Admin access required" });
     }
@@ -122,7 +122,7 @@ export const handlePaymentWebhook = async (req, res) => {
  */
 export const refundPayment = async (req, res) => {
   try {
-    const isAdmin = req.user?.roles?.includes("admin") || false;
+    const isAdmin = req.user?.role === "admin" || req.user?.role === "superAdmin";
     const { reason } = req.body;
     const payment = await refundPaymentService(req.params.id, reason, req.user.id, isAdmin);
     res.json({ success: true, data: payment });
