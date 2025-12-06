@@ -41,6 +41,7 @@ export const getUserReviewsService = async (userId, { limit = 20, page = 1 } = {
     .skip(skip)
     .limit(limit)
     .populate('reviewer', 'username avatarUrl')
+    .populate('exchange', '_id')
     .lean();
   const total = await Review.countDocuments({ reviewee: userId });
   return {
@@ -48,6 +49,15 @@ export const getUserReviewsService = async (userId, { limit = 20, page = 1 } = {
     pagination: { total, page, limit, pages: Math.ceil(total / limit) },
     summary: await User.findById(userId).select("rating").lean().then(user => user?.rating || { avg: 0, count: 0 })
   };
+};
+
+// Check if a user (as reviewer) has already reviewed a specific exchange
+export const checkUserReviewForExchangeService = async (reviewerId, exchangeId) => {
+  const review = await Review.findOne({ 
+    exchange: exchangeId, 
+    reviewer: reviewerId 
+  }).lean();
+  return !!review;
 };
 
 

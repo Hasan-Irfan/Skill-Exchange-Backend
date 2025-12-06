@@ -35,7 +35,7 @@ export const fundSchema = Joi.object({
 });
 
 export const agreementSchema = Joi.object({
-  newTerms: Joi.array().items(Joi.string()).optional(),
+  terms: Joi.array().items(Joi.string()).optional(),
   signed: Joi.boolean().optional(),
   type: Joi.string().valid("barter", "monetary", "hybrid").optional(),
   monetary: Joi.object({

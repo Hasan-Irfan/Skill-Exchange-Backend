@@ -9,12 +9,87 @@ export const ensureThreadAccess = async (threadId, userId) => {
   return thread;
 };
 
+// export const sendMessage = async (threadId, senderId, text, attachments = []) => {
+//   await ensureThreadAccess(threadId, senderId);
+//   const msg = await Message.create({ thread: threadId, sender: senderId, body: text, attachments });
+//   await Thread.findByIdAndUpdate(threadId, {
+//     $set: { lastMessageAt: new Date() },
+//   });
+//   return msg.toObject();
+// };
+
 export const sendMessage = async (threadId, senderId, text, attachments = []) => {
   await ensureThreadAccess(threadId, senderId);
-  const msg = await Message.create({ thread: threadId, sender: senderId, body: text, attachments });
+
+  try {
+    const preview = (() => {
+      if (typeof attachments === 'string') return attachments.slice(0, 200);
+      try { return JSON.stringify(attachments).slice(0, 200); } catch { return '[unserializable]'; }
+    })();
+    console.log('[sendMessage] incoming attachments type:', typeof attachments, 'preview:', preview);
+    try {
+      const caster = Message.schema.path('attachments')?.caster?.instance || 'unknown';
+      console.log('[sendMessage] schema attachments caster instance:', caster);
+    } catch {}
+  } catch (e) {
+    console.log('[sendMessage] attachments preview logging failed:', e?.message);
+  }
+
+  const normalize = (input) => {
+    if (!input) return [];
+    let arr = input;
+    if (typeof arr === 'string') {
+      try {
+        const parsed = JSON.parse(arr);
+        arr = parsed;
+      } catch (_) {
+        return [];
+      }
+    }
+    if (!Array.isArray(arr)) return [];
+    const result = [];
+    for (const item of arr) {
+      let obj = item;
+      if (typeof obj === 'string') {
+        try {
+          obj = JSON.parse(obj);
+        } catch (_) {
+          continue;
+        }
+      }
+      if (obj && typeof obj === 'object') {
+        const normalized = {
+          url: obj.url,
+          type: obj.type,
+          filename: obj.filename,
+          size: obj.size,
+        };
+        if (normalized.url) result.push(normalized);
+      }
+    }
+    return result;
+  };
+
+  const messageData = {
+    thread: threadId,
+    sender: senderId,
+    body: text,
+  };
+
+  const normalizedAttachments = normalize(attachments);
+  try {
+    console.log('[sendMessage] normalized attachments length:', normalizedAttachments.length, 'first:', normalizedAttachments[0] || null);
+  } catch {}
+  if (normalizedAttachments.length > 0) {
+    messageData.attachments = normalizedAttachments;
+  }
+
+  const msg = await Message.create(messageData);
+
   await Thread.findByIdAndUpdate(threadId, {
     $set: { lastMessageAt: new Date() },
   });
+
   return msg.toObject();
 };
 

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Exchange from "../model/exchange.model.js";
 import Listing from "../model/listing.model.js";
 import { Thread } from "../model/thread.model.js";
+import Review from "../model/review.model.js";
 import { refundPaymentService, createEscrowPaymentService, captureEscrowPaymentService } from "./paymentService.js";
 import { sendExchangeNotification } from "./notificationService.js";
 
@@ -197,6 +198,47 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
       throw new Error("Agreement stage is not active");
     }
 
+    // Track if any data changes that should clear signatures (check BEFORE updates)
+    let dataChanged = false;
+
+    // Check if exchange type changed
+    if (agreementData.type && exchange.type !== agreementData.type) {
+      dataChanged = true;
+    }
+
+    // Check if monetary details changed
+    if (agreementData.monetary) {
+      const currentTotal = exchange.monetary?.totalAmount;
+      const currentCurrency = exchange.monetary?.currency || 'PKR';
+      const newTotal = agreementData.monetary.totalAmount;
+      const newCurrency = agreementData.monetary.currency;
+      
+      // Check if totalAmount changed (only if provided)
+      if (newTotal !== undefined && Number.isFinite(newTotal) && currentTotal !== newTotal) {
+        dataChanged = true;
+      }
+      
+      // Check if currency changed (only if provided)
+      if (newCurrency && currentCurrency !== newCurrency) {
+        dataChanged = true;
+      }
+    }
+
+    // Check if terms changed (complete replacement)
+    if (!exchange.agreement) exchange.agreement = { terms: [], signedBy: [] };
+    if (Array.isArray(agreementData.terms)) {
+      const currentTermsStr = JSON.stringify(exchange.agreement.terms || []);
+      const newTermsStr = JSON.stringify(agreementData.terms);
+      if (currentTermsStr !== newTermsStr) {
+        dataChanged = true;
+      }
+    }
+
+    // Check if new terms are being added (backward compatibility)
+    if (Array.isArray(agreementData.newTerms) && agreementData.newTerms.length > 0) {
+      dataChanged = true;
+    }
+
     // Update exchange type if provided
     if (agreementData.type) {
       const prevType = exchange.type;
@@ -227,7 +269,7 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
       }
     }
 
-    // Handle monetary fields based on exchange type, merge any provided monetary inputs
+    // Handle monetary fields based on exchange type
     if (finalType === "monetary" || finalType === "hybrid") {
       exchange.monetary = exchange.monetary || {};
 
@@ -244,7 +286,7 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
         exchange.audit.push({ at: new Date(), by: user.id, action: "monetary_currency_set" });
       }
 
-      // fallback default currency if still missing, keep this optional if you want strict requirement
+      // fallback default currency if still missing
       if (!exchange.monetary.currency) {
         exchange.monetary.currency = "PKR";
       }
@@ -258,15 +300,29 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
       }
     }
 
-    if (!exchange.agreement) exchange.agreement = { terms: [], signedBy: [] };
-
-    if (Array.isArray(agreementData.newTerms) && agreementData.newTerms.length > 0) {
-      exchange.agreement.terms.push(...agreementData.newTerms);
-      exchange.agreement.signedBy = [];
-      exchange.status = "accepted_initial";
-      exchange.audit.push({ at: new Date(), by: user.id, action: "terms_updated" });
+    // Handle complete terms replacement (when terms array is provided)
+    if (Array.isArray(agreementData.terms)) {
+      const currentTermsStr = JSON.stringify(exchange.agreement.terms || []);
+      const newTermsStr = JSON.stringify(agreementData.terms);
+      if (currentTermsStr !== newTermsStr) {
+        exchange.agreement.terms = agreementData.terms;
+        exchange.audit.push({ at: new Date(), by: user.id, action: "terms_updated" });
+      }
     }
 
+    // Handle new terms addition (backward compatibility - appends to existing terms)
+    if (Array.isArray(agreementData.newTerms) && agreementData.newTerms.length > 0) {
+      exchange.agreement.terms.push(...agreementData.newTerms);
+      exchange.audit.push({ at: new Date(), by: user.id, action: "terms_added" });
+    }
+
+    // Clear signatures and reset status if any data changed
+    if (dataChanged) {
+      exchange.agreement.signedBy = [];
+      exchange.status = "accepted_initial";
+    }
+
+    // Handle signing
     if (agreementData.signed === true) {
       const already = (exchange.agreement.signedBy || []).some(id => String(id) === uid);
       if (!already) {
@@ -276,10 +332,12 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
       }
     }
 
+    // Check if both parties have signed
     const bothSigned = [String(exchange.initiator), String(exchange.receiver)]
       .every(u => (exchange.agreement.signedBy || []).some(id => String(id) === u));
 
-    if (bothSigned) {
+    // Only set status to agreement_signed if both signed AND no data was changed in this request
+    if (bothSigned && !dataChanged) {
       // final validation before moving to agreement_signed
       const finalTypeNow = exchange.type;
       if (!finalTypeNow) {
@@ -693,6 +751,7 @@ export const resolveDisputeService = async (user, exchangeId, resolution) => {
     throw new Error("Unauthorized");
   }
   exchange.status = "in_progress";
+  exchange.confirmations = { initiator: false, receiver: false };
   exchange.audit.push({ at: new Date(), by: user.id, action: "resolved by user and now in progress" });
   await exchange.save();
   const result = exchange.toObject();
@@ -714,6 +773,17 @@ export const getExchangeService = async (exchangeId, userId) => {
       .populate("monetary.escrowPaymentId")
       .populate("status")
       .lean();
+    
+    // Populate reviews for each exchange
+    for (const exchange of userExchanges) {
+      const reviews = await Review.find({ exchange: exchange._id })
+        .sort({ createdAt: -1 })
+        .populate('reviewer', 'username avatarUrl email')
+        .populate('reviewee', 'username avatarUrl email')
+        .lean();
+      exchange.reviews = reviews;
+    }
+    
     return userExchanges;
   } else {
     const exchange = await Exchange.findById(exchangeId)
@@ -726,6 +796,15 @@ export const getExchangeService = async (exchangeId, userId) => {
       .lean();
 
     if (!exchange) throw new Error("Exchange not found");
+    
+    // Populate reviews for the exchange
+    const reviews = await Review.find({ exchange: exchangeId })
+      .sort({ createdAt: -1 })
+      .populate('reviewer', 'username avatarUrl email')
+      .populate('reviewee', 'username avatarUrl email')
+      .lean();
+    exchange.reviews = reviews;
+    
     return exchange;
   }
 };
