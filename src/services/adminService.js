@@ -197,7 +197,6 @@ export const getReportsService = async (filters = {}) => {
     status,
     type,
     priority,
-    assignedTo,
     reporter,
     againstUser,
     exchange,
@@ -211,7 +210,6 @@ export const getReportsService = async (filters = {}) => {
   if (status) query.status = status;
   if (type) query.type = type;
   if (priority) query.priority = priority;
-  if (assignedTo) query.assignedTo = assignedTo;
   if (reporter) query.reporter = reporter;
   if (againstUser) query.againstUser = againstUser;
   if (exchange) query.exchange = exchange;
@@ -222,7 +220,6 @@ export const getReportsService = async (filters = {}) => {
     .populate("reporter", "username email avatarUrl")
     .populate("againstUser", "username email avatarUrl status")
     .populate("exchange", "status type")
-    .populate("assignedTo", "username email")
     .sort(sort)
     .limit(limit)
     .skip(skip)
@@ -241,58 +238,12 @@ export const getReportService = async (reportId) => {
     .populate("reporter", "username email avatarUrl")
     .populate("againstUser", "username email avatarUrl status")
     .populate("exchange", "status type monetary")
-    .populate("assignedTo", "username email")
     .lean();
 
   if (!report) throw new Error("Report not found");
   return report;
 };
 
-/**
- * Assign report to admin
- */
-export const assignReportService = async (adminId, reportId) => {
-  const session = await mongoose.startSession();
-  let out;
-  let reporterToNotify = null;
-  
-  await session.withTransaction(async () => {
-    const admin = await User.findById(adminId).session(session);
-    if (!admin || !isAdmin(admin)) {
-      throw new Error("Only admins can assign reports");
-    }
-
-    const report = await Report.findById(reportId).session(session);
-    if (!report) throw new Error("Report not found");
-
-    report.assignedTo = adminId;
-    if (report.status === "open") {
-      report.status = "under_review";
-    }
-    report.audit = report.audit || [];
-    report.audit.push({
-      at: new Date(),
-      by: adminId,
-      action: "assigned",
-      note: `Assigned to admin`
-    });
-
-    reporterToNotify = report.reporter;
-    await report.save({ session });
-    out = report.toObject();
-  });
-  
-  session.endSession();
-  if (out && reporterToNotify) {
-    await sendUserNotification(
-      reporterToNotify,
-      "Report under review",
-      "An administrator has started reviewing your report.",
-      { reportId: out._id }
-    );
-  }
-  return out;
-};
 
 /**
  * Update report status and add admin notes
@@ -312,8 +263,21 @@ export const updateReportService = async (adminId, reportId, updates) => {
     const report = await Report.findById(reportId).session(session);
     if (!report) throw new Error("Report not found");
 
+    // Prevent updates to resolved or rejected reports
+    if (report.status === "resolved" || report.status === "rejected") {
+      throw new Error(`Cannot update a ${report.status} report. The report is final.`);
+    }
+
+    // Auto-set status to under_review if report is open and admin is updating it
+    if (report.status === "open" && !updates.status) {
+      report.status = "under_review";
+      // Notify reporter that report is now under review
+      reporterToNotify = report.reporter;
+      reporterMessage = "Your report is now under review by an administrator.";
+    }
+
     if (updates.status) {
-      if (!["open", "under_review", "resolved", "rejected", "escalated"].includes(updates.status)) {
+      if (!["open", "under_review", "resolved", "rejected"].includes(updates.status)) {
         throw new Error("Invalid status");
       }
       report.status = updates.status;
@@ -353,11 +317,15 @@ export const updateReportService = async (adminId, reportId, updates) => {
       note: updates.note || "Report updated by admin"
     });
 
-    reporterToNotify = report.reporter;
-    const statusMsg = updates.status ? `Status updated to ${updates.status}.` : "";
-    const resolutionMsg = updates.resolution ? `Resolution: ${updates.resolution}.` : "";
-    const actionMsg = updates.actionTaken ? `Action taken: ${updates.actionTaken}.` : "";
-    reporterMessage = [statusMsg, resolutionMsg, actionMsg].filter(Boolean).join(" ").trim();
+    if (!reporterToNotify) {
+      reporterToNotify = report.reporter;
+    }
+    if (!reporterMessage) {
+      const statusMsg = updates.status ? `Status updated to ${updates.status}.` : "";
+      const resolutionMsg = updates.resolution ? `Resolution: ${updates.resolution}.` : "";
+      const actionMsg = updates.actionTaken ? `Action taken: ${updates.actionTaken}.` : "";
+      reporterMessage = [statusMsg, resolutionMsg, actionMsg].filter(Boolean).join(" ").trim() || "An administrator updated your report.";
+    }
 
     await report.save({ session });
     out = report.toObject();
@@ -368,7 +336,7 @@ export const updateReportService = async (adminId, reportId, updates) => {
     await sendUserNotification(
       reporterToNotify,
       "Report updated",
-      reporterMessage || "An administrator updated your report.",
+      reporterMessage,
       { reportId: out._id }
     );
   }

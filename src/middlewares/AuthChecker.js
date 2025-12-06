@@ -29,6 +29,11 @@ export const jwtVerify = asyncHandler (async (req,res,next) => {
           .json({ success: false, message: "Invalid Access Token" });
         }
 
+        // Ensure role is included and accessible
+        if (!user.role) {
+          console.error('AuthChecker: User has no role', { userId: user._id });
+        }
+
         req.user = user;
         next();
     }

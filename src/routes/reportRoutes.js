@@ -5,6 +5,7 @@ import { createReportSchema } from "../validations/reportValidations.js";
 import {
   createReport,
   getUserReports,
+  getReportsAgainstUser,
   getReport
 } from "../controllers/reportController.js";
 
@@ -16,6 +17,7 @@ router.use(jwtVerify);
 // User report routes
 router.post("/reports", validateRequest(createReportSchema), createReport);
 router.get("/reports", getUserReports);
+router.get("/reports/against-me", getReportsAgainstUser);
 router.get("/reports/:id", getReport);
 
 export default router;

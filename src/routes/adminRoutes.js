@@ -14,7 +14,6 @@ import {
   manageUserStatus,
   getReports,
   getReport,
-  assignReport,
   updateReport,
   adminResolveDispute,
   adminPaymentIntervention,
@@ -36,7 +35,6 @@ router.post("/admin/manage-role", roleChecker(["superAdmin"]), validateRequest(m
 router.post("/admin/manage-user-status", roleChecker(["admin", "superAdmin"]), validateRequest(manageUserStatusSchema), manageUserStatus);
 router.get("/admin/reports", roleChecker(["admin", "superAdmin"]), getReports);
 router.get("/admin/reports/:id", roleChecker(["admin", "superAdmin"]), getReport);
-router.post("/admin/reports/:id/assign", roleChecker(["admin", "superAdmin"]), assignReport);
 router.patch("/admin/reports/:id", roleChecker(["admin", "superAdmin"]), validateRequest(updateReportSchema), updateReport);
 router.post("/admin/exchanges/:id/resolve-dispute", roleChecker(["admin", "superAdmin"]), validateRequest(adminResolveDisputeSchema), adminResolveDispute);
 router.post("/admin/payment-intervention", roleChecker(["admin", "superAdmin"]), validateRequest(adminPaymentInterventionSchema), adminPaymentIntervention);

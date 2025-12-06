@@ -3,7 +3,6 @@ import {
   manageUserStatusService,
   getReportsService,
   getReportService as getAdminReportService,
-  assignReportService,
   updateReportService,
   adminResolveDisputeService,
   adminPaymentInterventionService,
@@ -48,7 +47,6 @@ export const getReports = async (req, res) => {
       status: req.query.status,
       type: req.query.type,
       priority: req.query.priority,
-      assignedTo: req.query.assignedTo,
       reporter: req.query.reporter,
       againstUser: req.query.againstUser,
       exchange: req.query.exchange,
@@ -73,18 +71,6 @@ export const getReport = async (req, res) => {
     res.json({ success: true, data: report });
   } catch (err) {
     res.status(404).json({ success: false, message: err.message });
-  }
-};
-
-/**
- * Assign report to admin
- */
-export const assignReport = async (req, res) => {
-  try {
-    const report = await assignReportService(req.user.id, req.params.id);
-    res.json({ success: true, data: report });
-  } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
   }
 };
 
