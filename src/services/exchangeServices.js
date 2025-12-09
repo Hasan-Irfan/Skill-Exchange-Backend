@@ -4,8 +4,11 @@ import Exchange from "../model/exchange.model.js";
 import Listing from "../model/listing.model.js";
 import { Thread } from "../model/thread.model.js";
 import Review from "../model/review.model.js";
+import Payment from "../model/payment.model.js";
+import User from "../model/user.model.js";
 import { refundPaymentService, createEscrowPaymentService, captureEscrowPaymentService } from "./paymentService.js";
 import { sendExchangeNotification } from "./notificationService.js";
+import { deductBalanceService, addBalanceService } from "./walletService.js";
 
 /**
  * Create new exchange request
@@ -52,7 +55,7 @@ export const createExchangeService = async (initiatorId, data) => {
       title: listing.title,
       skillId: listing.skill,
       price: listing.hourlyRate,
-      currency: "PKR",
+      currency: "USD",
       ownerId: listing.owner,
       visibility: listing.active ? "public" : "inactive",
       version: 1
@@ -68,7 +71,7 @@ export const createExchangeService = async (initiatorId, data) => {
           name: data.offerSkill.name,
           level: data.offerSkill.level || "intermediate",
           hourlyRate: data.offerSkill.hourlyRate,
-          currency: data.offerSkill.currency || "PKR",
+          currency: data.offerSkill.currency || "USD",
           details: data.offerSkill.details
         } : undefined,
         notes: data.notes
@@ -99,7 +102,7 @@ export const createExchangeService = async (initiatorId, data) => {
     // Set monetary info if provided (can be finalized in agreement phase)
     if ((exchangeData.type === "monetary" || exchangeData.type === "hybrid") && data.monetary) {
       exchangeData.monetary = {
-        currency: data.monetary.currency || "PKR",
+        currency: data.monetary.currency || "USD",
         totalAmount: data.monetary.totalAmount // Proposal amount (can be negotiated in agreement)
       };
     }
@@ -209,7 +212,7 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
     // Check if monetary details changed
     if (agreementData.monetary) {
       const currentTotal = exchange.monetary?.totalAmount;
-      const currentCurrency = exchange.monetary?.currency || 'PKR';
+      const currentCurrency = exchange.monetary?.currency || 'USD';
       const newTotal = agreementData.monetary.totalAmount;
       const newCurrency = agreementData.monetary.currency;
       
@@ -288,7 +291,7 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
 
       // fallback default currency if still missing
       if (!exchange.monetary.currency) {
-        exchange.monetary.currency = "PKR";
+        exchange.monetary.currency = "USD";
       }
     } else if (finalType === "barter") {
       if (exchange.monetary) {
@@ -389,7 +392,7 @@ export const signAgreementService = async (user, exchangeId, agreementData = {})
  *   - If listing type is "offer": listing owner receives (they provide service)
  *   - If listing type is "need": listing owner receives (they need service, initiator pays)
  */
-export const fundEscrowService = async (user, exchangeId, amount, currency = "PKR") => {
+export const fundEscrowService = async (user, exchangeId, amount, currency = "USD") => {
   if (!(Number.isFinite(amount) && amount > 0)) throw new Error("Invalid amount");
 
   const session = await mongoose.startSession();
@@ -417,7 +420,7 @@ export const fundEscrowService = async (user, exchangeId, amount, currency = "PK
     if (exchange.monetary?.escrowPaymentId) throw new Error("Escrow already funded");
 
     // Currency validation: must match exchange.monetary.currency if set
-    const expectedCurrency = exchange.monetary?.currency || "PKR";
+    const expectedCurrency = exchange.monetary?.currency || "USD";
     if (currency !== expectedCurrency) {
       throw new Error(`Currency must be ${expectedCurrency}, provided: ${currency}`);
     }
@@ -468,15 +471,25 @@ export const fundEscrowService = async (user, exchangeId, amount, currency = "PK
       throw new Error(`Only the payer can fund the escrow. For ${listing.type} listings, ${listing.type === "offer" ? "initiator" : "listing owner"} must pay.`);
     }
 
-    // Create escrow payment using payment service (centralized logic)
-    const payment = await createEscrowPaymentService(
-      exchange._id,
-      payer,
-      payee, // Payee can be set now or later when captured
+    // Deduct from payer's wallet balance
+    await deductBalanceService(payer, amount, session);
+
+    // Create escrow payment record for tracking (from wallet)
+    const [payment] = await Payment.create([{
+      exchange: exchange._id,
+      payer: payer,
+      payee: payee,
       amount,
       currency,
-      session
-    );
+      type: "escrow",
+      status: "escrowed",
+      gateway: "wallet", // Mark as from wallet
+      timeline: [{
+        at: new Date(),
+        status: "escrowed",
+        note: `Escrow funded from wallet: ${amount} ${currency}`
+      }]
+    }], { session });
 
     // Atomic update: only update if escrowPaymentId is still null (race condition protection)
     // This ensures that even if two requests come simultaneously, only one will succeed
@@ -617,8 +630,7 @@ export const confirmCompleteService = async (user, exchangeId) => {
       exchange.audit.push({ at: new Date(), by: user.id, action: "completed" });
       completedNow = true;
 
-      // Capture escrow payment using payment service (centralized logic)
-      // This handles payment status update, payee assignment, and user stats
+      // Transfer escrow to payee's wallet balance
       if (exchange.monetary?.escrowPaymentId) {
         try {
           // Determine correct payee based on listing type
@@ -638,17 +650,48 @@ export const confirmCompleteService = async (user, exchangeId) => {
             correctPayee = exchange.receiver; // Fallback
           }
 
-          // Capture payment using payment service (handles everything)
-          await captureEscrowPaymentService(
-            exchange.monetary.escrowPaymentId,
-            correctPayee,
-            user.id,
-            session
-          );
+          // Get payment details
+          const payment = await Payment.findById(exchange.monetary.escrowPaymentId).session(session);
+          if (payment && payment.status === "escrowed") {
+            // Transfer to payee's wallet balance
+            await addBalanceService(correctPayee, payment.amount, payment.currency, session);
+
+            // Update payment status
+            payment.status = "captured";
+            payment.payee = correctPayee;
+            payment.timeline.push({
+              at: new Date(),
+              status: "captured",
+              note: `Payment transferred to payee wallet: ${payment.amount} ${payment.currency}`
+            });
+            await payment.save({ session });
+
+            // Update user payment statistics
+            await User.findByIdAndUpdate(
+              payment.payer,
+              {
+                $inc: {
+                  "payments.totalPaid": payment.amount,
+                  "payments.paidCount": 1
+                }
+              },
+              { session }
+            );
+
+            await User.findByIdAndUpdate(
+              correctPayee,
+              {
+                $inc: {
+                  "payments.totalReceived": payment.amount,
+                  "payments.receivedCount": 1
+                }
+              },
+              { session }
+            );
+          }
         } catch (err) {
           // Log error but don't fail exchange completion
-          // Payment capture failure shouldn't block exchange completion
-          console.error(`Failed to capture payment during exchange completion: ${err.message}`);
+          console.error(`Failed to transfer payment during exchange completion: ${err.message}`);
         }
       }
     }
@@ -687,20 +730,25 @@ export const cancelExchangeService = async (user, exchangeId) => {
       throw new Error("Cannot cancel after start");
     }
 
-    // Refund escrow payment if exists (reuse refundPaymentService for consistency)
+    // Refund escrow payment to payer's wallet balance
     if (exchange.monetary?.escrowPaymentId) {
       try {
-        await refundPaymentService(
-          exchange.monetary.escrowPaymentId,
-          "Refunded due to exchange cancellation",
-          user.id,
-          false, // not admin
-          true,  // allowCancellation = true (bypasses dispute check)
-          session
-        );
+        const payment = await Payment.findById(exchange.monetary.escrowPaymentId).session(session);
+        if (payment && payment.status === "escrowed") {
+          // Refund to payer's wallet balance
+          await addBalanceService(payment.payer, payment.amount, payment.currency, session);
+
+          // Update payment status
+          payment.status = "refunded";
+          payment.timeline.push({
+            at: new Date(),
+            status: "refunded",
+            note: "Refunded to wallet due to exchange cancellation"
+          });
+          await payment.save({ session });
+        }
       } catch (err) {
         // If payment is already refunded or not in a refundable state, log but don't fail cancellation
-        // This handles edge cases where payment might have been refunded separately
         console.warn(`Could not refund payment during cancellation: ${err.message}`);
       }
     }

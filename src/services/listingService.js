@@ -33,7 +33,7 @@ export const createListingService = async (userId, data) => {
       .map(cat => cat._id || cat)
   )];
 
-  const currency = data.currency || skills?.currency || "PKR";
+  const currency = data.currency || skills?.currency || "USD";
 
   const listing = await Listing.create({
     ...data,

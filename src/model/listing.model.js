@@ -11,8 +11,8 @@ const ListingSchema = new Schema({
   description: String,
   experienceLevel: { type: String, enum: ["beginner","intermediate","expert"] },
   hourlyRate: Number,
-  // currency added, default PKR
-  currency: { type: String, default: "PKR" },
+  // currency added, default USD
+  currency: { type: String, default: "USD" },
   availability: {
     remote: Boolean,
     onsite: Boolean,

@@ -5,7 +5,7 @@ import Joi from "joi";
  */
 export const initiateExchangePaymentSchema = Joi.object({
   amount: Joi.number().positive().required(),
-  currency: Joi.string().min(2).max(10).optional().default("PKR"),
+  currency: Joi.string().min(2).max(10).optional().default("USD"),
   gateway: Joi.string().valid("stripe", "paypal", "manual").optional().default("manual")
 });
 

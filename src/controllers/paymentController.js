@@ -58,7 +58,7 @@ export const getExchangePayments = async (req, res) => {
  */
 export const initiateExchangePayment = async (req, res) => {
   try {
-    const { amount, currency = "PKR", gateway = "manual" } = req.body;
+    const { amount, currency = "USD", gateway = "manual" } = req.body;
     if (!amount || !Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ success: false, message: "Valid amount is required" });
     }

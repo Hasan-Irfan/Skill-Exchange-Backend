@@ -6,7 +6,7 @@ const SkillSnapshotSchema = new Schema({
   name: String,
   level: { type: String, enum: ["beginner","intermediate","expert"], default: "intermediate" },
   hourlyRate: Number,
-  currency: { type: String, default: "PKR" },
+  currency: { type: String, default: "USD" },
   details: String
 }, { _id: false });
 
@@ -50,7 +50,7 @@ const ExchangeSchema = new Schema({
 
   type: { type: String, enum: ["barter","monetary","hybrid"] },
   monetary: {
-    currency: { type: String, default: "PKR" },
+    currency: { type: String, default: "USD" },
     totalAmount: Number, // Full payment amount (no deposit system)
     escrowPaymentId: { type: Schema.Types.ObjectId, ref: "Payment" }
   },

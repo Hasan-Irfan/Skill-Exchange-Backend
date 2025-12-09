@@ -44,7 +44,15 @@ const UserSchema = new Schema({
     totalPaid: { type: Number, default: 0 }, 
     receivedCount: { type: Number, default: 0 }, 
     paidCount: { type: Number, default: 0 }, 
-    currency: { type: String, default: "PKR" } 
+    currency: { type: String, default: "USD" } 
+  },
+
+  wallet: {
+    balance: { type: Number, default: 0, min: 0 },
+    currency: { type: String, default: "USD" },
+    stripeCustomerId: String, // Stripe customer ID for top-ups
+    lastTopUpAt: Date,
+    lastWithdrawalAt: Date
   },
 
   notificationPrefs: {

@@ -3,6 +3,7 @@ import Payment from "../model/payment.model.js";
 import Exchange from "../model/exchange.model.js";
 import Listing from "../model/listing.model.js";
 import User from "../model/user.model.js";
+import { addBalanceService } from "./walletService.js";
 
 /**
  * Get payment by ID
@@ -96,7 +97,7 @@ export const getExchangePaymentsService = async (exchangeId, userId, isAdmin = f
  * @param {string} currency - Currency code
  * @param {Object} session - MongoDB session for transactions (required)
  */
-export const createEscrowPaymentService = async (exchangeId, payerId, payeeId, amount, currency = "PKR", session) => {
+export const createEscrowPaymentService = async (exchangeId, payerId, payeeId, amount, currency = "USD", session) => {
   if (!session) throw new Error("Session is required for payment creation");
 
   const [payment] = await Payment.create([{
@@ -160,6 +161,11 @@ export const captureEscrowPaymentService = async (paymentId, payeeId, userId, se
     { payee: payeeId },
     { session, new: true }
   );
+
+  // If payment was from wallet, transfer to payee's wallet balance
+  if (updatedPayment && updatedPayment.gateway === "wallet") {
+    await addBalanceService(payeeId, updatedPayment.amount, updatedPayment.currency, session);
+  }
 
   // Update user payment statistics
   if (updatedPayment) {
@@ -285,7 +291,7 @@ export const updatePaymentStatusService = async (paymentId, newStatus, note = ""
  * @param {string} currency - Currency code
  * @param {string} gateway - Payment gateway ("stripe", "paypal", "manual")
  */
-export const initiateExchangePaymentService = async (exchangeId, userId, amount, currency = "PKR", gateway = "manual") => {
+export const initiateExchangePaymentService = async (exchangeId, userId, amount, currency = "USD", gateway = "manual") => {
   if (!(Number.isFinite(amount) && amount > 0)) throw new Error("Invalid amount");
 
   const exchange = await Exchange.findById(exchangeId).lean();
@@ -494,6 +500,11 @@ export const refundPaymentService = async (
       userId,
       session
     );
+
+    // If payment was from wallet, refund to payer's wallet balance
+    if (payment.gateway === "wallet") {
+      await addBalanceService(payment.payer, payment.amount, payment.currency, session);
+    }
 
     // Update user payment statistics (reverse the payment)
     // Only update if payment was previously captured (had been counted)

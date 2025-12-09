@@ -46,6 +46,7 @@ import PaymentRouter from './routes/paymentRoutes.js';
 import NotificationRouter from './routes/notificationRoutes.js';
 import AdminRouter from './routes/adminRoutes.js';
 import ReportRouter from './routes/reportRoutes.js';
+import WalletRouter from './routes/walletRoutes.js';
 
 app.use('/api/v1', AuthRouter);
 app.use('/api/v1', UserRouter);
@@ -59,6 +60,7 @@ app.use('/api/v1', PaymentRouter);
 app.use('/api/v1', NotificationRouter);
 app.use('/api/v1', AdminRouter);
 app.use('/api/v1', ReportRouter);
+app.use('/api/v1/wallet', WalletRouter);
 
 // ERROR MIDDLEWARE
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
