@@ -167,11 +167,41 @@ export const postMessage = asyncHandler(async (req, res) => {
   // CRITICAL: Only use attachments from file upload
   // Do NOT use req.body.attachments at all
   
-  const msg = await sendMessage(threadId, req.user.id, text, attachments);
+  const result = await sendMessage(threadId, req.user.id, text, attachments);
   const io = req.app.get('io');
-  io.to(String(threadId)).emit('message:new', { threadId, message: msg });
+  
+  // Handle Gemini response (result can be a single message or an object with userMessage and geminiMessage)
+  const { Message } = await import('../model/message.model.js');
+  
+  if (result && typeof result === 'object' && result.userMessage && result.geminiMessage) {
+    // Gemini thread - emit both messages
+    const populatedUserMsg = await Message.findById(result.userMessage._id)
+      .populate('sender', 'username avatarUrl')
+      .lean();
 
-  res.status(201).json({ success: true, data: msg });
+    const populatedGeminiMsg = await Message.findById(result.geminiMessage._id)
+      .populate('sender', 'username avatarUrl')
+      .lean();
+
+    // Emit user message first
+    io.to(String(threadId)).emit('message:new', { threadId, message: populatedUserMsg });
+    
+    // Small delay before emitting Gemini response for better UX
+    setTimeout(() => {
+      io.to(String(threadId)).emit('message:new', { threadId, message: populatedGeminiMsg });
+    }, 300);
+    
+    // Return user message in response
+    res.status(201).json({ success: true, data: populatedUserMsg });
+  } else {
+    // Regular message - emit normally
+    const populated = await Message.findById(result._id)
+      .populate('sender', 'username avatarUrl')
+      .lean();
+
+    io.to(String(threadId)).emit('message:new', { threadId, message: populated });
+    res.status(201).json({ success: true, data: populated });
+  }
 });
 
 export const getThreadMessages = asyncHandler(async (req, res) => {
@@ -185,6 +215,12 @@ export const readThread = asyncHandler(async (req, res) => {
   const { threadId } = req.params;
   await markRead(threadId, req.user.id);
   res.json({ success: true });
+});
+
+export const getGeminiThread = asyncHandler(async (req, res) => {
+  const { getOrCreateGeminiThread } = await import("../services/threadService.js");
+  const thread = await getOrCreateGeminiThread(req.user.id);
+  res.json({ success: true, data: thread });
 });
 
 

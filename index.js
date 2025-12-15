@@ -85,14 +85,37 @@ io.on('connection', (socket) => {
     if (!threadId) return;
 
     const { sendMessage } = await import('./src/services/messageService.js');
-    const msg = await sendMessage(threadId, socket.user.id, text, attachments || []);
+    const result = await sendMessage(threadId, socket.user.id, text, attachments || []);
 
     const { Message } = await import('./src/model/message.model.js');
-    const populated = await Message.findById(msg._id)
-      .populate('sender', 'username avatarUrl')
-      .lean();
+    
+    // Handle Gemini response (result can be a single message or an object with userMessage and geminiMessage)
+    // Check if result has both userMessage and geminiMessage (Gemini response)
+    if (result && typeof result === 'object' && result.userMessage && result.geminiMessage) {
+      // Gemini thread - emit both messages
+      const populatedUserMsg = await Message.findById(result.userMessage._id)
+        .populate('sender', 'username avatarUrl')
+        .lean();
 
-    io.to(String(threadId)).emit('message:new', { threadId, message: populated });
+      const populatedGeminiMsg = await Message.findById(result.geminiMessage._id)
+        .populate('sender', 'username avatarUrl')
+        .lean();
+
+      // Emit user message first
+      io.to(String(threadId)).emit('message:new', { threadId, message: populatedUserMsg });
+      
+      // Small delay before emitting Gemini response for better UX
+      setTimeout(() => {
+        io.to(String(threadId)).emit('message:new', { threadId, message: populatedGeminiMsg });
+      }, 300);
+    } else if (result && result._id) {
+      // Regular message - emit normally
+      const populated = await Message.findById(result._id)
+        .populate('sender', 'username avatarUrl')
+        .lean();
+
+      io.to(String(threadId)).emit('message:new', { threadId, message: populated });
+    }
   }));
 
   // --------------------------------------
