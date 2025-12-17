@@ -23,6 +23,7 @@ export const listingSchema = Joi.object({
 export const listingUpdateSchema = Joi.object({
   title: Joi.string().min(3).max(100).optional(),
   description: Joi.string().max(1000).optional(),
+  category: Joi.array().required(),
   type: Joi.string().valid("offer", "need").optional(),
   skillsOffered: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
   skillsNeeded: Joi.array().items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/)).optional(),
