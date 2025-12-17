@@ -37,7 +37,7 @@ export const getOrCreateStripeCustomer = async (userId, email, name) => {
 /**
  * Create Payment Intent for wallet top-up
  */
-export const createTopUpPaymentIntent = async (customerId, amount, currency = "USD") => {
+export const createTopUpPaymentIntent = async (customerId, amount, currency = "USD", userId = null) => {
   try {
     // Stripe uses lowercase currency codes
     const currencyCode = currency.toLowerCase();
@@ -46,13 +46,20 @@ export const createTopUpPaymentIntent = async (customerId, amount, currency = "U
     // For USD: 1 USD = 100 cents
     const amountInSmallestUnit = Math.round(amount * 100);
     
+    const metadata = {
+      type: "wallet_topup",
+    };
+    
+    // Store userId in metadata for webhook handling
+    if (userId) {
+      metadata.userId = String(userId);
+    }
+    
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInSmallestUnit,
       currency: currencyCode,
       customer: customerId,
-      metadata: {
-        type: "wallet_topup",
-      },
+      metadata,
       description: `Wallet top-up of ${amount} ${currency.toUpperCase()}`,
     });
 

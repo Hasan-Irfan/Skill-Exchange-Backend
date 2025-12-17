@@ -1,6 +1,5 @@
 import { verifyWebhookSignature } from "../services/stripeService.js";
 import { confirmTopUpService } from "../services/walletService.js";
-import Payment from "../model/payment.model.js";
 import express from "express";
 
 // Stripe requires raw body for webhook signature verification
@@ -61,26 +60,22 @@ export const handleStripeWebhook = async (req, res) => {
  */
 const handlePaymentIntentSucceeded = async (paymentIntent) => {
   try {
-    // Find payment by gatewayRef (paymentIntent.id)
-    // The paymentIntent.metadata should contain userId if we set it
-    // For now, we'll find by gatewayRef
-    
-    // Call confirmTopUpService
-    // Note: We need to find the userId from the payment record
-    const payment = await Payment.findOne({
-      gatewayRef: paymentIntent.id,
-      type: "topup",
-      status: "initiated"
-    });
+    // Get userId from payment intent metadata
+    // Top-ups no longer create Payment records, so we get userId from metadata
+    const userId = paymentIntent.metadata?.userId;
 
-    if (!payment) {
-      console.warn(`Payment not found for payment intent: ${paymentIntent.id}`);
-      return;
+    if (!userId) {
+      console.warn(`No userId found in metadata for payment intent: ${paymentIntent.id}`);
+      // Check if this is a top-up (only process top-ups here)
+      if (paymentIntent.metadata?.type !== "wallet_topup") {
+        return; // Not a top-up, ignore
+      }
+      throw new Error("UserId not found in payment intent metadata");
     }
 
-    // Confirm top-up (this will add to user balance)
-    await confirmTopUpService(paymentIntent.id, payment.payer);
-    console.log(`Top-up confirmed for payment intent: ${paymentIntent.id}`);
+    // Confirm top-up (this will add to user balance directly, no Payment record)
+    await confirmTopUpService(paymentIntent.id, userId);
+    console.log(`Top-up confirmed for payment intent: ${paymentIntent.id}, userId: ${userId}`);
   } catch (err) {
     console.error("Error handling payment_intent.succeeded:", err);
     throw err;
@@ -92,20 +87,12 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
  */
 const handlePaymentIntentFailed = async (paymentIntent) => {
   try {
-    const payment = await Payment.findOne({
-      gatewayRef: paymentIntent.id,
-      type: "topup"
-    });
-
-    if (payment && payment.status === "initiated") {
-      payment.status = "failed";
-      payment.timeline.push({
-        at: new Date(),
-        status: "failed",
-        note: `Payment failed: ${paymentIntent.last_payment_error?.message || "Unknown error"}`
-      });
-      await payment.save();
-      console.log(`Top-up failed for payment intent: ${paymentIntent.id}`);
+    // Top-ups no longer create Payment records
+    // Just log the failure for top-ups
+    if (paymentIntent.metadata?.type === "wallet_topup") {
+      const userId = paymentIntent.metadata?.userId;
+      console.log(`Top-up failed for payment intent: ${paymentIntent.id}, userId: ${userId}, error: ${paymentIntent.last_payment_error?.message || "Unknown error"}`);
+      // No Payment record to update, just log
     }
   } catch (err) {
     console.error("Error handling payment_intent.payment_failed:", err);
@@ -117,20 +104,12 @@ const handlePaymentIntentFailed = async (paymentIntent) => {
  */
 const handlePaymentIntentCanceled = async (paymentIntent) => {
   try {
-    const payment = await Payment.findOne({
-      gatewayRef: paymentIntent.id,
-      type: "topup"
-    });
-
-    if (payment && payment.status === "initiated") {
-      payment.status = "failed";
-      payment.timeline.push({
-        at: new Date(),
-        status: "failed",
-        note: "Payment canceled"
-      });
-      await payment.save();
-      console.log(`Top-up canceled for payment intent: ${paymentIntent.id}`);
+    // Top-ups no longer create Payment records
+    // Just log the cancellation for top-ups
+    if (paymentIntent.metadata?.type === "wallet_topup") {
+      const userId = paymentIntent.metadata?.userId;
+      console.log(`Top-up canceled for payment intent: ${paymentIntent.id}, userId: ${userId}`);
+      // No Payment record to update, just log
     }
   } catch (err) {
     console.error("Error handling payment_intent.canceled:", err);

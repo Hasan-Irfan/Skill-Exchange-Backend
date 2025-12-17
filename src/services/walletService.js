@@ -19,6 +19,7 @@ export const getBalanceService = async (userId) => {
 /**
  * Top-up wallet balance using Stripe
  * Step 1: Create Payment Intent
+ * Note: No Payment record is created - top-ups directly add to wallet balance
  */
 export const initiateTopUpService = async (userId, amount, currency = "USD") => {
   if (!(Number.isFinite(amount) && amount > 0)) {
@@ -48,31 +49,15 @@ export const initiateTopUpService = async (userId, amount, currency = "USD") => 
       await user.save({ session });
     }
 
-    // Create Payment Intent
+    // Create Payment Intent with userId in metadata for webhook handling
     const paymentIntent = await createTopUpPaymentIntent(
       stripeCustomerId,
       amount,
-      currency
+      currency,
+      userId // Pass userId to store in metadata
     );
 
-    // Create payment record for tracking
-    const [payment] = await Payment.create([{
-      payer: userId,
-      amount,
-      currency,
-      type: "topup",
-      status: "initiated",
-      gateway: "stripe",
-      gatewayRef: paymentIntent.id,
-      timeline: [{
-        at: new Date(),
-        status: "initiated",
-        note: `Top-up initiated: ${amount} ${currency}`
-      }]
-    }], { session });
-
     out = {
-      paymentId: payment._id,
       paymentIntent: {
         id: paymentIntent.id,
         clientSecret: paymentIntent.client_secret,
@@ -89,39 +74,13 @@ export const initiateTopUpService = async (userId, amount, currency = "USD") => 
 /**
  * Confirm top-up after Stripe payment succeeds
  * Called by webhook or after frontend confirms payment
+ * Note: No Payment record is created - directly adds to wallet balance
  */
 export const confirmTopUpService = async (paymentIntentId, userId) => {
   const session = await mongoose.startSession();
   let out;
   
   await session.withTransaction(async () => {
-    // Find payment by gatewayRef (paymentIntentId)
-    const payment = await Payment.findOne({
-      gatewayRef: paymentIntentId,
-      type: "topup"
-    }).session(session);
-
-    if (!payment) {
-      throw new Error("Top-up payment not found");
-    }
-
-    // Idempotency: If already confirmed, return existing result
-    if (payment.status === "captured") {
-      const user = await User.findById(userId).session(session);
-      if (!user) throw new Error("User not found");
-      
-      out = {
-        payment: payment.toObject(),
-        newBalance: user.wallet?.balance || 0,
-      };
-      return;
-    }
-
-    // Only process if status is "initiated"
-    if (payment.status !== "initiated") {
-      throw new Error(`Payment cannot be confirmed. Current status: ${payment.status}`);
-    }
-
     // Verify payment intent status
     const paymentIntent = await getPaymentIntent(paymentIntentId);
     
@@ -129,32 +88,58 @@ export const confirmTopUpService = async (paymentIntentId, userId) => {
       throw new Error(`Payment not succeeded. Status: ${paymentIntent.status}`);
     }
 
-    // Verify user matches
-    if (String(payment.payer) !== String(userId)) {
-      throw new Error("Unauthorized");
+    // Verify user matches (from metadata)
+    const metadataUserId = paymentIntent.metadata?.userId;
+    if (metadataUserId && String(metadataUserId) !== String(userId)) {
+      throw new Error("Unauthorized: User ID mismatch");
     }
 
-    // Update payment status
-    payment.status = "captured"; // Using "captured" for successful top-up
-    payment.timeline.push({
-      at: new Date(),
-      status: "captured",
-      note: "Top-up completed successfully"
-    });
-    await payment.save({ session });
-
-    // Add to user balance
     const user = await User.findById(userId).session(session);
     if (!user) throw new Error("User not found");
 
+    // Idempotency check: Check if this payment intent was already processed
+    // Store processed payment intent IDs in wallet metadata
     user.wallet = user.wallet || {};
-    user.wallet.balance = (user.wallet.balance || 0) + payment.amount;
-    user.wallet.currency = payment.currency;
+    const processedPaymentIntents = user.wallet.processedTopUpPaymentIntents || [];
+    
+    if (processedPaymentIntents.includes(paymentIntentId)) {
+      // Already processed, return current balance
+      out = {
+        paymentIntentId: paymentIntent.id,
+        amount: paymentIntent.amount / 100,
+        currency: paymentIntent.currency.toUpperCase(),
+        newBalance: user.wallet.balance || 0,
+        alreadyProcessed: true,
+      };
+      return;
+    }
+
+    // Calculate amount from payment intent (convert from smallest unit)
+    const amount = paymentIntent.amount / 100;
+    const currency = paymentIntent.currency.toUpperCase();
+
+    // Add to user balance
+    user.wallet.balance = (user.wallet.balance || 0) + amount;
+    user.wallet.currency = currency;
     user.wallet.lastTopUpAt = new Date();
+    
+    // Track processed payment intent ID for idempotency
+    if (!user.wallet.processedTopUpPaymentIntents) {
+      user.wallet.processedTopUpPaymentIntents = [];
+    }
+    user.wallet.processedTopUpPaymentIntents.push(paymentIntentId);
+    
+    // Keep only last 100 processed payment intents to prevent array from growing too large
+    if (user.wallet.processedTopUpPaymentIntents.length > 100) {
+      user.wallet.processedTopUpPaymentIntents = user.wallet.processedTopUpPaymentIntents.slice(-100);
+    }
+    
     await user.save({ session });
 
     out = {
-      payment: payment.toObject(),
+      paymentIntentId: paymentIntent.id,
+      amount,
+      currency,
       newBalance: user.wallet.balance,
     };
   });
