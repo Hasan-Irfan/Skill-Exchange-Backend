@@ -1,5 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendMessage, getMessages, markRead } from "../services/messageService.js";
+import { getOrCreateGeminiThread } from "../services/geminiThreadService.js";
+import { maybeTriggerGeminiReply } from "../services/geminiTriggerService.js";
 import cloudinary from "../config/cloudinary.js";
 import path from "path";
 
@@ -171,6 +173,21 @@ export const postMessage = asyncHandler(async (req, res) => {
   const io = req.app.get('io');
   io.to(String(threadId)).emit('message:new', { threadId, message: msg });
 
+  // Trigger Gemini reply if applicable (async, non-blocking)
+  // Gemini response will be emitted via socket when ready
+  maybeTriggerGeminiReply(threadId, msg).then((geminiMessage) => {
+    if (geminiMessage && io) {
+      // Emit Gemini's response via socket
+      io.to(String(threadId)).emit('message:new', { 
+        threadId, 
+        message: geminiMessage 
+      });
+    }
+  }).catch(err => {
+    // Silently handle errors - user's message was already sent
+    console.error("Gemini trigger error (non-blocking):", err.message);
+  });
+
   res.status(201).json({ success: true, data: msg });
 });
 
@@ -185,6 +202,15 @@ export const readThread = asyncHandler(async (req, res) => {
   const { threadId } = req.params;
   await markRead(threadId, req.user.id);
   res.json({ success: true });
+});
+
+/**
+ * Get or create Gemini thread for authenticated user
+ * This endpoint is called when user clicks "Chat with AI"
+ */
+export const getGeminiThread = asyncHandler(async (req, res) => {
+  const thread = await getOrCreateGeminiThread(req.user.id);
+  res.json({ success: true, data: thread });
 });
 
 

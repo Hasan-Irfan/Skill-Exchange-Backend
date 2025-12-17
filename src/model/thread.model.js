@@ -5,7 +5,8 @@ const ThreadSchema = new Schema({
   participants: [{ type: Schema.Types.ObjectId, ref: "User" }],
   exchange: { type: Schema.Types.ObjectId, ref: "Exchange" },
   lastMessageAt: Date,
-  unreadBy: [{ type: Schema.Types.ObjectId, ref: "User" }]
+  unreadBy: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  isAI: { type: Boolean, default: false } // Flag for AI threads (Gemini)
 }, { timestamps: true });
 
 ThreadSchema.index({ participants: 1, lastMessageAt: -1 });
