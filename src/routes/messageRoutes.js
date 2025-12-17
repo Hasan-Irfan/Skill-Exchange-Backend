@@ -1,7 +1,7 @@
 import express from "express";
 import { jwtVerify } from "../middlewares/AuthChecker.js";
 import { uploadMessageFile } from "../middlewares/multer.js";
-import { postMessage, getThreadMessages, readThread, getGeminiThread } from "../controllers/messageController.js";
+import { postMessage, getThreadMessages, readThread, getGeminiThread} from "../controllers/messageController.js";
 
 const router = express.Router();
 

@@ -135,6 +135,14 @@ export const postMessage = asyncHandler(async (req, res) => {
             resource_type: resourceType,
             folder: folder,
             public_id: `${threadId}_${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`,
+            access_mode: 'public', // Ensure files are publicly accessible
+            use_filename: true,
+            unique_filename: true,
+            // For PDFs and other raw files, add flags to ensure proper access
+            ...(resourceType === 'raw' ? { 
+              type: 'upload',
+              invalidate: false 
+            } : {})
           },
           (error, result) => {
             if (error) reject(error);
