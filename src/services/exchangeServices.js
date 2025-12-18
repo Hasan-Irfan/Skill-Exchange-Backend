@@ -735,21 +735,28 @@ export const cancelExchangeService = async (user, exchangeId) => {
       try {
         const payment = await Payment.findById(exchange.monetary.escrowPaymentId).session(session);
         if (payment && payment.status === "escrowed") {
-          // Refund to payer's wallet balance
+          // 1) Refund to payer's wallet balance
           await addBalanceService(payment.payer, payment.amount, payment.currency, session);
 
-          // Update payment status
-          payment.status = "refunded";
-          payment.timeline.push({
+          // 2) Remove the escrow payment record so it no longer appears in payment history
+          //    This effectively "undoes" the payment since the funds were returned to the wallet.
+          await Payment.findByIdAndDelete(payment._id, { session });
+
+          // 3) Clear the escrowPaymentId reference on the exchange
+          if (exchange.monetary) {
+            exchange.monetary.escrowPaymentId = undefined;
+          }
+
+          // 4) Add audit entry for transparency
+          exchange.audit.push({
             at: new Date(),
-            status: "refunded",
-            note: "Refunded to wallet due to exchange cancellation"
+            by: user.id,
+            action: "escrow_refunded_and_payment_removed",
           });
-          await payment.save({ session });
         }
       } catch (err) {
-        // If payment is already refunded or not in a refundable state, log but don't fail cancellation
-        console.warn(`Could not refund payment during cancellation: ${err.message}`);
+        // If payment is already refunded/removed or not in a refundable state, log but don't fail cancellation
+        console.warn(`Could not refund or remove payment during cancellation: ${err.message}`);
       }
     }
 

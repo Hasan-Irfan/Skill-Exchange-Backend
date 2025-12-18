@@ -606,9 +606,9 @@ export const getDisputedExchangesService = async ({ limit = 20, skip = 0 } = {})
   const query = { status: "disputed" };
   const [exchanges, total] = await Promise.all([
     Exchange.find(query)
-      .populate("initiator", "username email")
-      .populate("receiver", "username email")
-      .populate("dispute.raisedBy", "username email")
+      .populate("initiator", "username email avatarUrl")
+      .populate("receiver", "username email avatarUrl")
+      .populate("dispute.raisedBy", "username email avatarUrl")
       .populate("request.listing", "title type")
       .sort({ updatedAt: -1 })
       .skip(skip)
@@ -635,7 +635,7 @@ export const getAdminDashboardService = async () => {
     totalExchanges,
     disputedExchanges,
     totalPayments,
-    pendingPayments
+    totalListings
   ] = await Promise.all([
     User.countDocuments({}),
     User.countDocuments({ status: "active" }),
@@ -647,7 +647,7 @@ export const getAdminDashboardService = async () => {
     Exchange.countDocuments({}),
     Exchange.countDocuments({ status: "disputed" }),
     Payment.countDocuments({}),
-    Payment.countDocuments({ status: "pending" })
+    Listing.countDocuments({})
   ]);
 
   return {
@@ -667,8 +667,10 @@ export const getAdminDashboardService = async () => {
       disputed: disputedExchanges
     },
     payments: {
-      total: totalPayments,
-      pending: pendingPayments
+      total: totalPayments
+    },
+    listings: {
+      total: totalListings
     }
   };
 };

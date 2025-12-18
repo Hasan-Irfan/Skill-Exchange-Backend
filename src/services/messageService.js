@@ -1,12 +1,26 @@
 import { Thread } from "../model/thread.model.js";
 import { Message } from "../model/message.model.js";
+import User from "../model/user.model.js";
 
 export const ensureThreadAccess = async (threadId, userId) => {
   const thread = await Thread.findById(threadId).lean();
   if (!thread) throw new Error("Thread not found");
+
+  // Normal access: user must be a participant in the thread
   const isParticipant = thread.participants.some((p) => String(p) === String(userId));
-  if (!isParticipant) throw new Error("Access denied");
-  return thread;
+  if (isParticipant) return thread;
+
+  // Admin override: allow admins/superAdmins to view any thread
+  // This is used for admin tools like dispute resolution.
+  if (userId) {
+    const user = await User.findById(userId).lean();
+    const role = user?.role;
+    if (role === "admin" || role === "superAdmin") {
+      return thread;
+    }
+  }
+
+  throw new Error("Access denied");
 };
 
 // export const sendMessage = async (threadId, senderId, text, attachments = []) => {
